@@ -1,0 +1,40 @@
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+\paragraph{Validation scope.}
+\sys validates enumeration, driver initialization, runtime control, DMA, and
+interrupt handling against a physical backend. Because it terminates the
+DUT-side accesses above the PCIe link, it cannot validate PHY training, LTSSM,
+link errors, DLLP/TLP replay, equalization, or electrical behavior. It
+complements rather than replaces a physical protocol analyzer or direct-link
+test.
+
+\paragraph{Extending device types.}
+A new queue-based PCIe device can reuse topology, ECAM, dispatch, and DMA-window
+mechanisms, but still needs a semantic adapter that identifies submission
+points, translates its DMA-bearing structures, and defines completion ordering.
+The NIC experience shows why generic MMIO forwarding is insufficient. A useful
+future metric is adapter complexity and the fraction of logic reused across
+devices, rather than device count alone.
+
+\paragraph{Performance envelope.}
+Software control mediation is appropriate when setup and submission rates are
+modest relative to payload work. Faster DUTs, deep queues, or packet-scale
+doorbells may expose the tens-of-microseconds path as a bottleneck. Batching,
+doorbell coalescing, faster event transport, and selectively moving stable
+parsing operations into parameterized hardware are possible responses without
+abandoning the overall separation.
+
+\paragraph{Topology and isolation.}
+The current system configures a pre-provisioned hierarchy before boot and gives
+each physical function to one backend. It does not provide hotplug, arbitrary
+switch construction, SR-IOV sharing, malicious-DUT isolation, or live migration.
+Those features require explicit IOMMU policy, reset containment, per-vector
+interrupt remapping, and failure recovery.
+
+\paragraph{Beyond pre-silicon prototypes.}
+The logical subsystem abstraction could also front a fabricated DUT or support
+user-space and paravirtual drivers. This produces an attractive longer-term
+design space across development stage, driver model, and backend placement.
+The present paper does not count those combinations as implemented features;
+post-silicon reuse requires a compatible access front-end and separate evidence.

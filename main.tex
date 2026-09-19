@@ -1,0 +1,80 @@
+\documentclass[sigconf,anonymous]{acmart}
+
+% FPGA 2027 uses the ACM SIGCONF format and double-blind review.
+% Keep the official acmart layout unchanged for submission.
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{xspace}
+\usepackage{enumitem}
+\usepackage{xcolor}
+
+\newcommand{\sys}{\textsc{SCOPE}\xspace}
+\newcommand{\tax}{\emph{peripheral integration tax}\xspace}
+\newcommand{\TODO}[1]{\textcolor{red}{[TODO: #1]}}
+
+\acmConference[FPGA '27]{The 35th ACM/SIGDA International Symposium on Field-Programmable Gate Arrays}{March 14--16, 2027}{Monterey, CA, USA}
+\acmYear{2027}
+\copyrightyear{2027}
+\settopmatter{printacmref=false}
+
+\hypersetup{
+  pdftitle={SCOPE: A Software-Defined Peripheral Subsystem for FPGA Prototyping},
+  pdfauthor={Anonymous Authors}
+}
+
+\begin{document}
+
+\title{SCOPE: A Software-Defined Peripheral Subsystem for FPGA Prototyping}
+\author{Anonymous Author(s)}
+
+\begin{abstract}
+FPGA prototypes must run production operating systems and drivers against real
+peripherals, yet the devices available to a design under test (DUT) are usually
+fixed by board connectors, host placement, and device-specific FPGA logic.
+Remote access alone does not solve this problem: an unmodified DUT software
+stack must still discover a legal PCIe topology, issue native register and queue
+operations, expose DMA buffers, and observe ordered completions. We present
+\sys, a software-defined peripheral subsystem that makes the DUT-visible device
+composition and backend binding software decisions. \sys realizes this ability
+through two architectural separations. It decouples device presentation from
+backend implementation and deployment, and separates programmable control
+mediation from bulk data movement. A generic FPGA front-end serves a shadowed
+configuration hierarchy, routes BAR accesses, transports control events, and
+injects interrupts. A host software back-end owns the authoritative topology
+and device state, translates device-specific submission semantics and DMA
+addresses, and binds each logical endpoint to a physical backend. Coherence
+rules across configuration, routing, DMA visibility, and completion preserve
+the native device contract after these functions are separated. Our prototype
+exposes multiple NVMe endpoints and an Intel NIC to a RISC-V SoC prototype and
+runs unmodified Linux NVMe and \texttt{igb} drivers. Initial measurements show
+comparable 128-KiB sequential-read throughput for host-attached and on-board
+NVMe backends (13.52 versus 13.28 MiB/s) while identifying control mediation and
+the low-frequency DUT as the present performance limits.
+\end{abstract}
+
+\ccsdesc[500]{Hardware~Reconfigurable logic and FPGAs}
+\ccsdesc[300]{Computer systems organization~System on chip}
+\ccsdesc[300]{Software and its engineering~Device drivers}
+
+\keywords{FPGA prototyping, PCIe, real peripherals, software-defined I/O, device virtualization}
+
+\maketitle
+
+\input{sections/01-introduction}
+\input{sections/02-background-motivation}
+\input{sections/03-overview}
+\input{sections/04-design}
+\input{sections/05-implementation}
+\input{sections/06-evaluation}
+\input{sections/07-related-work}
+\input{sections/08-discussion}
+\input{sections/09-conclusion}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

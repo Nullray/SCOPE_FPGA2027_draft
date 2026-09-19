@@ -1,0 +1,46 @@
+\section{Related Work}
+\label{sec:related}
+
+\subsection{FPGA Prototyping Infrastructure}
+
+FASED separates a target DRAM model from its FPGA host implementation and makes
+model timing parameters configurable without rebuilding the complete target
+\cite{biancolin2019fased}. LEAP provides reusable services and latency-
+insensitive interfaces for FPGA applications \cite{fleming2014leap}. RIFFA
+offers a portable host--FPGA communication interface \cite{jacobsen2013riffa}.
+These systems show the value of stable FPGA infrastructure and host/target
+decoupling. \sys applies that principle to a different object: a real
+peripheral subsystem that a processor DUT discovers and operates with its
+native device driver. Its challenge includes the coupled configuration, BAR,
+queue, DMA, completion, and interrupt contract.
+
+\subsection{Modular and Networked FPGA Systems}
+
+Galapagos abstracts heterogeneous CPU/FPGA nodes and makes communication layers
+replaceable without changing the application \cite{eskandari2019galapagos}.
+Network FPGA clusters similarly separate logical accelerator groupings from
+physical datacenter placement \cite{tarafdar2017clusters}. These works organize
+compute kernels and their communication. \sys instead organizes devices
+presented to an FPGA-hosted processor: the endpoint must participate in PCIe
+discovery and preserve a vendor protocol expected by an unmodified OS driver.
+
+\subsection{FPGA Operating Systems and Device Access}
+
+Feniks provides an FPGA OS layer, abstract I/O interfaces, direct PCIe access to
+server resources, and a design for remote resource access
+\cite{zhang2017feniks}. HybridOS integrates CPU and reconfigurable accelerators
+under OS runtime support \cite{kelm2008hybridos}. Their service target is an
+FPGA application or accelerator. \sys serves a processor DUT and presents a
+driver-compatible device hierarchy. It does not claim remote access or PCIe
+peer-to-peer transfer as novel in isolation. Its contribution is the software-
+defined endpoint view plus end-to-end mediation needed to take the DUT from
+enumeration through native I/O.
+
+\subsection{PCIe Virtualization and Disaggregation}
+
+Device passthrough and composable PCIe systems can assign physical functions or
+fabric-attached resources to hosts. Their control plane operates on real PCIe
+functions and links. \sys instead constructs a logical configuration hierarchy
+at an FPGA prototype boundary and may adapt commands and DMA addresses before a
+physical backend executes them. Thus its scope is system-software validation,
+not transparent extension of the physical PCIe link.

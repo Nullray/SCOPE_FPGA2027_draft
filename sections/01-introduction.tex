@@ -1,0 +1,73 @@
+\section{Introduction}
+\label{sec:intro}
+
+FPGA prototypes allow hardware and system software to evolve before silicon is
+available. Their value increasingly depends on running a complete software
+stack, including the operating system, production drivers, and realistic I/O
+workloads. Such validation requires real NVMe SSDs, NICs, and accelerators:
+software device models are configurable and observable, but their usefulness is
+bounded by the fidelity of the modeled controller, firmware, timing, and DMA
+behavior.
+
+Attaching a real device preserves those behaviors, but usually makes the
+validation environment rigid. The DUT can use only devices reachable through
+the prototype board and its host topology. Adding device types often requires
+device-specific RTL for configuration, register access, DMA, and interrupts.
+Changing the device composition may require rewiring, additional PCIe hardware,
+or a new FPGA build. These costs consume both scarce FPGA resources and
+engineering time. We call their incremental cost the \tax.
+
+Moving a device to another host does not by itself remove this coupling. A DUT
+does not consume an abstract remote-I/O service. Its unmodified Linux stack
+expects a locally discoverable PCIe function with coherent configuration and
+BAR state. Its driver creates protocol-specific queues, publishes DMA addresses,
+rings doorbells, and assumes that data is visible before a completion or
+interrupt arrives. Forwarding MMIO operations without preserving this end-to-end
+contract may enumerate a device but cannot make it usable.
+
+This paper asks: \emph{Can the peripheral subsystem visible to an FPGA-hosted
+DUT be defined in software, without moving complete device implementations into
+the FPGA and without changing the DUT driver?} We answer with \sys, a
+software-defined peripheral subsystem for FPGA prototyping. ``Software-defined''
+has a precise meaning in \sys: within a hardware-supported capacity, software
+selects which logical endpoints the DUT sees, binds them to local or remote
+physical backends, and chooses how their control semantics and DMA paths are
+realized. The bitstream provides stable mechanisms rather than a fixed device
+composition.
+
+\sys obtains this ability through \emph{dual decoupling}. First,
+\emph{presentation--implementation decoupling} separates the PCIe identity and
+driver-visible behavior presented to the DUT from the physical device's
+location and backend realization. Second, \emph{control--data decoupling}
+allows software to mediate configuration and runtime control while bulk data
+uses a separately optimized DMA path. These separations create flexibility, but
+they are safe only if the resulting distributed state still behaves like one
+device. \sys therefore enforces three coherence relations: configuration writes
+become visible together with their BAR routes; a submission reaches a backend
+only after its queue entry and translated DMA addresses are visible; and a
+completion becomes visible only after its data effects.
+
+The FPGA front-end implements standard ECAM access, a configuration shadow,
+BAR routing, a control-event transport, DMA windows, and interrupt injection.
+The host software back-end owns the logical topology and device state, dispatches
+accesses by logical BDF, translates NVMe and NIC queue semantics, and connects
+each endpoint to a physical device. This partition keeps latency-critical,
+interface-facing mechanisms in hardware while placing extensible device
+semantics in software.
+
+This paper makes three contributions:
+\begin{itemize}[leftmargin=*]
+    \item It defines a software-defined peripheral subsystem that turns the
+    DUT-visible device composition and endpoint-to-backend binding into software
+    configuration rather than a consequence of physical attachment.
+    \item It presents a hardware/software architecture based on dual
+    decoupling and explicit semantic-coherence rules spanning enumeration,
+    runtime control, DMA address translation, completion, and interrupts.
+    \item It implements the design for a RISC-V SoC FPGA prototype with real
+    NVMe and Intel Ethernet backends, and evaluates native-driver compatibility,
+    control overhead, data-path performance, and FPGA scaling cost.
+\end{itemize}
+
+The current implementation targets pre-silicon FPGA prototyping. The same
+logical abstraction may be useful in post-silicon validation, but we treat that
+extension as future work rather than a demonstrated contribution.

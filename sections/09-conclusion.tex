@@ -1,0 +1,12 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+\sys makes the peripheral subsystem visible to an FPGA-hosted DUT a software
+decision. It decouples device presentation from physical implementation and
+deployment, and separates programmable control mediation from bulk data
+movement. Coherence rules across configuration, routing, submission, DMA data,
+completion, and interrupts preserve native device behavior after this split.
+The prototype demonstrates that an unmodified Linux stack can enumerate and use
+real NVMe and Ethernet backends through a generic FPGA front-end. The remaining
+evaluation will quantify the central FPGA claim: that endpoint growth consumes
+generic capacity while new device semantics are added primarily in software.

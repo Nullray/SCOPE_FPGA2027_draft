@@ -1,0 +1,53 @@
+\section{Background and Motivation}
+\label{sec:motivation}
+
+\subsection{Why Real Peripherals Matter}
+
+Full-system validation exercises more than a register specification. An NVMe
+driver allocates submission and completion queues, constructs PRP lists, rings a
+doorbell, waits for DMA and then consumes a phase-tagged completion. A NIC driver
+programs descriptor rings, transfers ownership with queue-tail registers, and
+interprets device-specific interrupt causes. Controller firmware, reset corner
+cases, DMA ordering, and the interaction with an unmodified driver all affect
+the observed behavior. A software model is useful for early bring-up and fault
+injection, but every modeled behavior is also an assumption. A physical backend
+provides an independent implementation of the device data plane and firmware.
+
+\subsection{Why Physical Attachment Is Insufficient}
+
+Conventional attachment couples three decisions that validation engineers need
+to vary independently:
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Presentation:} which topology, identities, BARs, and
+    capabilities the DUT discovers;
+    \item \textbf{Control realization:} where configuration and
+    protocol-specific control semantics execute;
+    \item \textbf{Data realization:} how a device reaches DUT memory and how
+    data and completions return.
+\end{enumerate}
+The board topology commonly fixes all three. PCIe extension and disaggregation
+can move the physical device, but do not automatically synthesize the DUT-facing
+topology or translate guest DMA addresses and device semantics.
+
+\subsection{The Peripheral Integration Tax}
+
+We define the \tax as the incremental hardware and engineering cost of adding a
+device type or instance to an FPGA validation platform. It includes device-
+specific RTL, configuration state, on-chip buffers, routing pressure, timing
+closure risk, and resynthesis effort. Two axes matter. A new \emph{type} may
+require new protocol state machines, whereas another \emph{instance} requires
+more addressable state and routing capacity. No implementation can make the
+second cost zero. Our goal is narrower: keep the FPGA-side per-instance cost to
+generic state and routing entries, and move device-specific state growth to the
+software back-end.
+
+\subsection{Requirements}
+
+Four requirements follow. First, an unmodified DUT OS must enumerate and bind
+its native driver. Second, configuration, BAR routing, DMA, completion, and
+interrupt state must remain mutually consistent even though different agents
+own them. Third, control mediation must not force all payload bytes through the
+same software path. Fourth, adding an endpoint within the provisioned capacity
+should not require a different DUT interface or bitstream. \sys does not attempt
+to reproduce a physical PCIe link: it validates the system-software and device
+interaction above the link layer, not PHY, LTSSM, DLLP, or electrical behavior.

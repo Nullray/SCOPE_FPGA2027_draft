@@ -1,0 +1,100 @@
+\section{System Overview}
+\label{sec:overview}
+
+\subsection{Software-Defined Peripheral Subsystem}
+
+\sys presents a logical PCIe hierarchy to the DUT. A logical endpoint has a
+virtual BDF, configuration image, BAR routes, interrupt state, and a binding to
+a backend. The backend may be a physical function attached to the FPGA host or
+reachable through a remote transport. The DUT names only logical resources; it
+does not know the host BDF, transport endpoint, or host-side DMA aperture.
+
+Figure~\ref{fig:overview} will show the four architectural stages: logical
+topology construction, configuration-space virtualization, endpoint semantic
+mediation, and DMA-path realization. The first two determine what the DUT sees.
+The latter two make that device operational.
+
+\begin{figure}[t]
+    \centering
+    \fbox{\parbox{0.93\columnwidth}{\centering
+    \textbf{DUT and native driver}\\[2pt]
+    Standard ECAM, BAR, DMA, and interrupt interface\\[4pt]
+    $\Downarrow$ FPGA front-end $\Downarrow$\\[4pt]
+    \textbf{Topology and semantic back-end}\\[2pt]
+    Logical endpoint $\mapsto$ local or remote physical backend}}
+    \caption{\sys presents a local PCIe interface while software defines the
+    logical topology and backend binding. Replace this placeholder with the
+    final architecture diagram.}
+    \label{fig:overview}
+\end{figure}
+
+\subsection{Dual Decoupling}
+
+Table~\ref{tab:decoupling} separates the two mechanisms. Presentation--
+implementation decoupling answers \emph{what device does the DUT see and which
+backend implements it?} Control--data decoupling answers \emph{which operations
+require semantic mediation and how do payload bytes move?} Neither alone is
+sufficient. The first without the second creates a configurable view whose
+software proxy may become the data bottleneck. The second without the first
+accelerates transfer but leaves device identity and placement fixed.
+
+\begin{table}[t]
+\centering
+\caption{Dual decoupling realizes the software-defined abstraction.}
+\label{tab:decoupling}
+\small
+\begin{tabular}{@{}p{0.29\columnwidth}p{0.31\columnwidth}p{0.31\columnwidth}@{}}
+\toprule
+Mechanism & Separates & Enables \\
+\midrule
+Presentation--implementation & DUT-visible PCIe identity and behavior from backend placement/realization & Endpoint rebinding, location transparency, software-selected composition \\
+Control--data & Configuration and device control semantics from bulk payload movement & Programmable mediation with independently optimized DMA paths \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Coherence after Separation}
+
+Dual decoupling distributes one device contract across the DUT, FPGA, host
+software, and physical backend. \sys restores a single observable order with
+three invariants:
+\begin{description}[leftmargin=*,style=nextline]
+    \item[Configuration--route coherence.] A configuration write completes only
+    after the authoritative image and any affected BAR route agree.
+    \item[Submission--DMA coherence.] A physical doorbell is issued only after
+    the submitted descriptor is stable and every device-visible address has
+    been translated to a reachable target.
+    \item[Data--completion coherence.] The DUT observes completion state or an
+    interrupt only after the corresponding data is visible in DUT memory.
+\end{description}
+These invariants are not a third decoupling. They constrain the freedom created
+by the two separations so the native driver still observes a legal device.
+
+\subsection{Scope of Software Configuration}
+
+The prototype supports a fixed maximum hierarchy and a finite set of generic
+route entries. Software activates endpoints, chooses their types, assigns BDFs
+under the provisioned switch ports, and binds backends before DUT enumeration.
+This is software-configurable composition, not arbitrary online topology
+rewiring or PCIe hotplug.
+
+\begin{table}[t]
+\centering
+\caption{Longer-term access space and the slice evaluated in this paper.}
+\label{tab:access-space}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Dimension & Design space & Evaluated slice \\
+\midrule
+DUT stage & Pre-silicon / post-silicon & Pre-silicon \\
+Software access & User / kernel / virtualized & Standard kernel driver \\
+Backend placement & Local / remote & Local and host-remote \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The three dimensions motivate a $2\times3\times2$ design space, but they are
+not independent features that the current prototype already implements in all
+combinations. We use the table to state the intended abstraction boundary and
+the evaluated slice precisely.

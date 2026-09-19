@@ -1,0 +1,94 @@
+\section{Design}
+\label{sec:design}
+
+\subsection{Logical Topology Construction}
+
+The software back-end starts from a topology specification that lists enabled
+logical endpoints, their virtual BDFs, device templates, and backend bindings.
+It constructs Type-1 bridge images and Type-0 endpoint images, including vendor
+and device identity, class code, BAR shape, and the capabilities that \sys can
+faithfully implement. Capabilities are promises: for example, the current NIC
+template omits MSI-X because the prototype implements a shared level interrupt
+rather than a virtual MSI-X table and vector remapper.
+
+Topology realization produces two coupled artifacts. A compact ECAM image is
+copied into FPGA-visible shadow memory, and a route table maps assigned BAR
+ranges to logical backend identifiers. A readiness protocol hides both paths
+until the image and routes are initialized, preventing Linux enumeration from
+observing a partially constructed hierarchy.
+
+\subsection{Configuration-Space Virtualization}
+
+The FPGA front-end exposes a standard ECAM aperture. Reads to defined BDFs use
+the shadow memory fast path; reads to absent functions return all ones. Writes
+become fixed-size control events carrying BDF, offset, byte enables, payload,
+and a sequence number. Software applies PCI configuration semantics to the
+authoritative image, recomputes any BAR route affected by probing or assignment,
+writes the changed state back to the shadow, and acknowledges the matching
+sequence. Only then does the FPGA complete the DUT write. This rule makes a
+subsequent read and BAR access observe the new state.
+
+The shadow is therefore a read cache rather than an independent device model.
+Software owns writable semantics, while the FPGA supplies predictable ECAM
+latency and a standard interface to the DUT.
+
+\subsection{Endpoint Semantic Mediation}
+
+For runtime access, the FPGA matches a BAR address against its route entries and
+emits an event tagged with logical BDF, BAR, offset, width, byte enables, and
+sequence. The generic manager dispatches the event to a per-type semantic
+adapter. Reads return a value and status through a mailbox. Ordinary writes can
+be acknowledged after the required backend effect. Submission writes require a
+stronger ordering rule.
+
+A native driver prepares commands or descriptors in memory before writing a
+doorbell. The physical backend cannot consume the original entry because it
+contains DUT addresses. The adapter waits until the FPGA has accepted the BAR
+write and the associated memory entry is stable, parses the entry, translates
+its DMA references, writes the translated form, and only then forwards the
+physical doorbell. This sequence preserves ownership transfer without requiring
+the DUT driver to understand the proxy.
+
+Device semantics remain explicit. The NVMe adapter understands controller
+registers, queue setup, doorbells, PRPs and PRP lists, and phase-tagged CQEs. The
+NIC adapter understands ring bases and lengths, descriptor buffer addresses,
+tail updates, reset behavior, and interrupt cause/mask registers. Common
+dispatch and transport do not make unlike devices semantically interchangeable.
+
+\subsection{DMA Data-Path Realization}
+
+\sys separates address retargeting from byte movement. On submission, a semantic
+adapter replaces each DUT physical address with an address reachable by the
+selected physical backend. For host-local devices, the translated address can
+target a coherent alias of DUT memory through the FPGA DMA aperture, allowing
+the physical device to move payload without a software copy. A remote backend
+may instead use staging or a transport-specific direct path. Both modes preserve
+the same logical endpoint contract even though their performance and copy count
+differ.
+
+Completion follows the reverse dependency. The back-end first makes returned
+payload and device writebacks visible in DUT memory. It then publishes the
+guest-visible completion state, updates the adapter's pending state, and finally
+changes the virtual interrupt level. This ordering prevents a driver from being
+woken before the data it will consume.
+
+\subsection{Interrupt Virtualization}
+
+The initial prototype exports legacy INTx. Each backend maintains private
+pending state, and the manager ORs those states into one aggregate level. A
+queue-consumption doorbell, mask update, or reset changes only the owning
+backend; the physical line is deasserted only when no backend remains pending.
+For the NIC, the adapter also preserves read-clear and set/clear semantics of
+the interrupt cause and mask registers. MSI/MSI-X requires per-vector table,
+address, and delivery virtualization and is outside the current implementation.
+
+\subsection{Scaling the FPGA Mechanism}
+
+The FPGA contains endpoint-independent mechanisms: one ECAM service path, one
+control-event channel, one mailbox, a parameterized route table, DMA windows,
+and interrupt injection. Adding another supported endpoint consumes another
+configuration slot, route state, and software object, but does not replicate an
+NVMe or NIC controller in RTL. Adding a device type primarily extends the
+software semantic adapter. The remaining hardware cost is real and must be
+measured, but it grows with generic capacity rather than duplicated device
+protocol engines.
