@@ -36,16 +36,17 @@ realized. The bitstream provides stable mechanisms rather than a fixed device
 composition.
 
 \sys obtains this ability through \emph{dual decoupling}. First,
-\emph{presentation--implementation decoupling} separates the PCIe identity and
-driver-visible behavior presented to the DUT from the physical device's
-location and backend realization. Second, \emph{control--data decoupling}
-allows software to mediate configuration and runtime control while bulk data
-uses a separately optimized DMA path. These separations create flexibility, but
-they are safe only if the resulting distributed state still behaves like one
-device. \sys therefore enforces three coherence relations: configuration writes
-become visible together with their BAR routes; a submission reaches a backend
-only after its queue entry and translated DMA addresses are visible; and a
-completion becomes visible only after its data effects.
+\emph{device-presentation--backend-implementation decoupling} separates the
+PCIe identity and driver-visible behavior presented to the DUT from the
+physical device's location and backend realization. Second,
+\emph{control-semantics--data-path decoupling} allows software to mediate
+configuration and runtime control while bulk data uses a separately optimized
+DMA path. These separations create flexibility, but they are safe only if the
+resulting distributed state still behaves like one device. \sys therefore
+enforces three coherence relations: configuration writes become visible
+together with their BAR routes; a submission reaches a backend only after its
+queue entry and translated DMA addresses are visible; and a completion becomes
+visible only after its data effects.
 
 The FPGA front-end implements standard ECAM access, a configuration shadow,
 BAR routing, a control-event transport, DMA windows, and interrupt injection.
@@ -60,12 +61,15 @@ This paper makes three contributions:
     \item It defines a software-defined peripheral subsystem that turns the
     DUT-visible device composition and endpoint-to-backend binding into software
     configuration rather than a consequence of physical attachment.
-    \item It presents a hardware/software architecture based on dual
-    decoupling and explicit semantic-coherence rules spanning enumeration,
+    \item It presents a hardware/software architecture based on device-
+    presentation--backend-implementation decoupling and control-semantics--
+    data-path decoupling, with explicit coherence rules spanning enumeration,
     runtime control, DMA address translation, completion, and interrupts.
     \item It implements the design for a RISC-V SoC FPGA prototype with real
     NVMe and Intel Ethernet backends, and evaluates native-driver compatibility,
-    control overhead, data-path performance, and FPGA scaling cost.
+    control overhead, and data-path performance. FPGA resource scaling and
+    simultaneous multi-device operation are identified as experiments rather
+    than reported results until their measurement records are complete.
 \end{itemize}
 
 The current implementation targets pre-silicon FPGA prototyping. The same

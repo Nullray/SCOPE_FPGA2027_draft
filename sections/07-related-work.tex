@@ -36,11 +36,28 @@ peer-to-peer transfer as novel in isolation. Its contribution is the software-
 defined endpoint view plus end-to-end mediation needed to take the DUT from
 enumeration through native I/O.
 
-\subsection{PCIe Virtualization and Disaggregation}
+\subsection{PCIe Virtualization, Disaggregation, and Composable Fabrics}
 
-Device passthrough and composable PCIe systems can assign physical functions or
-fabric-attached resources to hosts. Their control plane operates on real PCIe
-functions and links. \sys instead constructs a logical configuration hierarchy
-at an FPGA prototype boundary and may adapt commands and DMA addresses before a
-physical backend executes them. Thus its scope is system-software validation,
-not transparent extension of the physical PCIe link.
+Device passthrough and composable PCIe fabrics can assign physical functions or
+fabric-attached resources to hosts, and PCIe switches can route those functions
+between hosts and devices. Their control plane operates on real PCIe functions
+and links; the primary abstraction is resource assignment in the fabric.
+\sys instead constructs a logical configuration hierarchy at an FPGA prototype
+boundary and may adapt commands and DMA addresses before a physical backend
+executes them. Its abstraction is therefore different in two ways: the DUT
+sees a software-selected device presentation, and the host coordinator
+preserves device-specific control/data semantics across the boundary. \sys is
+complementary to composable PCIe hardware, but its evaluation target is
+system-software validation rather than transparent extension of the physical
+PCIe link.
+
+\subsection{Position of SCOPE}
+
+Across these systems, the reusable idea is a stable interface between a
+workload and a changing implementation. SCOPE applies that idea to a processor
+DUT that must run a native peripheral driver. The contribution is not a new
+PCIe transport, a new NVMe/NIC protocol, or a claim that remote DMA is novel in
+isolation. It is the method of combining device-presentation--backend-
+implementation decoupling with control-semantics--data-path decoupling, then
+constraining the split with configuration--route, submission--DMA, and
+data--completion coherence.

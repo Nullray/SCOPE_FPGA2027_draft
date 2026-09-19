@@ -1,64 +1,57 @@
 \section{Implementation}
 \label{sec:implementation}
 
-We implement \sys around a RISC-V SoC FPGA prototype running Linux and a host
-running a modified QEMU device manager. The FPGA and host communicate through a
-Xilinx XDMA endpoint. The current logical hierarchy contains two common bridge
-functions and up to thirteen downstream-port/endpoint pairs. Software stores 28
-configuration-function slots of 4 KiB each in a compact ECAM shadow; a 128-KiB
-dual-port BRAM aperture accommodates the image. The DUT accesses a 16-MiB PCI
-memory window in which Linux allocates endpoint BARs.
+\sys is instantiated on a XiangShan RISC-V FPGA prototype connected to an
+x86 host. The FPGA bitstream contains the generic routing interface; the host
+starts QEMU with a backend configuration that selects which provisioned logical
+endpoints are active. Thus changing the device composition does not require a
+new DUT driver or a new FPGA image. The current implementation provisions up to
+13 backend slots, but the paper treats this number as a capacity parameter, not
+as evidence that 13 physical devices were evaluated simultaneously.
 
-\subsection{FPGA Front-End}
+\subsection{Generic Interface}
 
-The front-end implements ECAM decoding, direct shadow reads, serialized
-configuration writes, and BAR matching. Configuration and BAR events use
-32-byte records carried to a host-allocated cyclic DMA ring. A mailbox carries
-acknowledgments, BAR read data, route updates, readiness state, and the aggregate
-INTx level in the reverse direction. The XDMA bypass interface exposes both raw
-DUT memory and a coherent alias used by physical devices and QEMU when reading
-or patching queues.
+The FPGA side exposes two stable abstractions. First, a standard ECAM-facing
+read/write path makes the logical hierarchy visible to the DUT. Reads use a
+shadowed configuration image; writes are represented as ordered control events
+and are acknowledged only after the host coordinator updates the authoritative
+image and any affected BAR route. Second, a generic MMIO and DMA interface
+connects each logical endpoint to a selected backend. The interface reports the
+logical BDF, BAR, offset, access width, and sequence, while a coherent alias
+allows the host and physical device to access DUT-visible memory without
+forcing payload bytes through the control mailbox.
 
-The virtual hierarchy intentionally stops above the PCIe link. Linux uses the
-generic ECAM host bridge, while \sys implements neither a physical downstream
-link nor PHY, LTSSM, DLLP, or complete TLP behavior.
+This partition is the hardware form of the two decouplings. The FPGA does not
+contain a complete NVMe or Ethernet controller. It provides the stable
+presentation, routing, event, and ordering mechanisms that can be reused when a
+new semantic adapter is added in software.
 
-\subsection{Software Back-End}
+\subsection{Host Coordinator and Semantic Adapters}
 
-The manager owns the XDMA descriptors, compact ECAM image, route table, and
-shared interrupt level. Each endpoint object stores its type, virtual BDF,
-backend binding, operations table, and private protocol state. Dispatch by BDF
-prevents queue, doorbell, and completion state from leaking between endpoints.
-Startup fails atomically if any enabled physical backend cannot be acquired,
-preventing a logical endpoint from advertising a device that software cannot
-operate.
+The host coordinator owns the logical topology, configuration authority, route
+state, backend lifecycle, DMA-address translation, and aggregate interrupt
+state. A per-endpoint adapter interprets the protocol-specific control
+operations. The NVMe adapter recognizes controller configuration, queue setup,
+doorbells, PRP-bearing commands, and phase-tagged completions. The 82580
+adapter recognizes queue descriptors, tail updates, reset, and interrupt-cause
+semantics. Both adapters use the same generic event and DMA mechanisms, but
+their semantic state remains private to the endpoint.
 
-\subsection{NVMe Adapter}
+The adapter does not forward a submission merely because the DUT has written a
+doorbell. It first establishes that the queue entry is stable, translates
+device-visible addresses to the selected backend's address domain, and then
+performs the physical submission. In the reverse direction, payload and
+writebacks become visible before the guest completion and interrupt are
+published. These ordering rules are the implementation of the
+submission--DMA and data--completion coherence invariants.
 
-The NVMe adapter maps a physical controller BAR and virtualizes CAP, VS, CC,
-CSTS, queue configuration, and doorbells. It maintains independent queue and
-command state per endpoint. Before forwarding a submission doorbell, it reads
-the DUT SQE through the coherent alias until two consecutive copies agree,
-checks basic field validity, and translates metadata, PRP1, PRP2, and any PRP
-list entries. Physical CQEs arrive through the same coherent path. The adapter
-validates phase, SQ identifier, head, and outstanding command state before
-advancing the guest-visible completion and aggregate interrupt.
+\subsection{Supported Slice and Boundaries}
 
-\subsection{Ethernet Adapter}
-
-The Ethernet adapter binds one Intel 82580 function to one logical endpoint. It
-exposes a 512-KiB BAR0 with device ID \texttt{8086:150e} and class
-\texttt{020000}. The virtual capability list hides MSI/MSI-X and BAR3, so the
-unmodified Linux \texttt{igb} driver selects one legacy TX/RX queue pair. The
-adapter shadows queue-0 ring bases and lengths, rewrites descriptor buffer
-addresses, forwards TDT/RDT only after descriptor translation, polls physical
-writebacks and causes, and emulates virtual ICR/IMS semantics. Controlled reset
-stops DMA, masks the physical device, waits for reset, and clears only that
-endpoint's virtual state.
-
-\subsection{Current Boundaries}
-
-The implementation supports BAR0-only endpoints and aggregate INTx. It does not
-yet support MSI/MSI-X, AER, hotplug, arbitrary switch capabilities, or multiple
-NIC queues. Backend configuration occurs before DUT enumeration. These limits
-define the claims and experiments in this paper.
+The evaluated slice uses a pre-silicon DUT, standard kernel drivers, and local
+or host-remote physical backends. The current NIC prototype exposes one queue
+pair and legacy INTx; MSI/MSI-X, AER, hotplug, arbitrary switch capabilities,
+and multi-queue scaling are not claimed. Likewise, the implementation does not
+reproduce the physical PCIe link or claim post-silicon reuse. These boundaries
+make the contribution a method for software-defined peripheral composition and
+semantic mediation, rather than a claim of complete PCIe or device
+virtualization.

@@ -27,7 +27,12 @@ to vary independently:
 \end{enumerate}
 The board topology commonly fixes all three. PCIe extension and disaggregation
 can move the physical device, but do not automatically synthesize the DUT-facing
-topology or translate guest DMA addresses and device semantics.
+topology or translate guest DMA addresses and device semantics. SCOPE therefore
+defines the software-configurable boundary narrowly: the FPGA bitstream provides
+the generic ECAM, route, mailbox, DMA-window, and interrupt mechanisms, while a
+startup backend configuration selects the active endpoints and their bindings.
+This is configuration-only composition within a pre-provisioned hierarchy, not
+arbitrary runtime hot-plug or an unlimited number of physical devices.
 
 \subsection{The Peripheral Integration Tax}
 
@@ -48,6 +53,9 @@ its native driver. Second, configuration, BAR routing, DMA, completion, and
 interrupt state must remain mutually consistent even though different agents
 own them. Third, control mediation must not force all payload bytes through the
 same software path. Fourth, adding an endpoint within the provisioned capacity
-should not require a different DUT interface or bitstream. \sys does not attempt
-to reproduce a physical PCIe link: it validates the system-software and device
-interaction above the link layer, not PHY, LTSSM, DLLP, or electrical behavior.
+should not require a different DUT interface or bitstream. The last requirement
+is an implementation property of the generic mechanisms; it still needs a
+capacity sweep before we claim a particular FPGA resource slope. \sys does not
+attempt to reproduce a physical PCIe link: it validates the system-software and
+device interaction above the link layer, not PHY, LTSSM, DLLP, or electrical
+behavior.

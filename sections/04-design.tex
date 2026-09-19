@@ -90,5 +90,7 @@ and interrupt injection. Adding another supported endpoint consumes another
 configuration slot, route state, and software object, but does not replicate an
 NVMe or NIC controller in RTL. Adding a device type primarily extends the
 software semantic adapter. The remaining hardware cost is real and must be
-measured, but it grows with generic capacity rather than duplicated device
-protocol engines.
+measured; the intended hypothesis is that it grows with generic capacity rather
+than with duplicated device protocol engines. The 1/2/4/8/13-slot synthesis
+sweep in Section~\ref{sec:evaluation} is the experiment that can turn this
+hypothesis into a quantitative scalability claim.

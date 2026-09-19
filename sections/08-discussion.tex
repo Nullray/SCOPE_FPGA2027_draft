@@ -38,3 +38,12 @@ user-space and paravirtual drivers. This produces an attractive longer-term
 design space across development stage, driver model, and backend placement.
 The present paper does not count those combinations as implemented features;
 post-silicon reuse requires a compatible access front-end and separate evidence.
+
+\paragraph{Interpretation of the contribution.}
+The central claim is methodological: a stable, software-configurable device
+presentation can be separated from backend realization when control semantics
+and payload movement are treated as different planes and connected by explicit
+coherence rules. The current prototype is evidence for that method in one
+pre-silicon slice. MSI/MSI-X, multi-queue operation, AER, hotplug, Vortex/GDS,
+post-silicon reuse, and the full $2\times3\times2$ space are extensions, not
+unstated results of the present evaluation.
