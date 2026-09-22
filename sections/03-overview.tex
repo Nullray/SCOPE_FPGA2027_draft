@@ -9,51 +9,85 @@ a backend. The backend may be a physical function attached to the FPGA host or
 reachable through a remote transport. The DUT names only logical resources; it
 does not know the host BDF, transport endpoint, or host-side DMA aperture.
 
-Figure~\ref{fig:overview} shows the four architectural stages: logical
-topology construction, configuration-space virtualization, endpoint semantic
-mediation, and DMA-path realization. The first two determine what the DUT sees;
-the latter two make that device operational.
+Figure~\ref{fig:overview} maps the logical device contract onto the FPGA,
+host coordinator, and physical backends. Four mechanisms realize this mapping:
+logical topology construction, configuration-space virtualization, endpoint
+semantic mediation, and DMA-path realization. The first two determine what the
+DUT sees; the latter two make that device operational.
 
-\begin{figure}[t]
+\begin{figure*}[t]
     \centering
-    \resizebox{\columnwidth}{!}{%
-    \begin{tikzpicture}[
-      box/.style={draw, rounded corners, align=center, minimum height=0.55cm,
-                  text width=2.35cm, inner sep=3pt},
-      smallbox/.style={draw, rounded corners, align=center, minimum height=0.55cm,
-                  text width=2.55cm, inner sep=3pt},
-      >=Latex, node distance=0.22cm and 0.45cm,
-      every node/.style={font=\scriptsize}]
-      \node[box] (dut) {DUT + native driver\\ECAM, BAR, DMA, INTx};
-      \node[box, below=of dut] (fpga) {FPGA routing interface\\ECAM shadow, BAR routes, mailbox};
-      \node[smallbox, below=of fpga] (coord) {Host coordinator\\logical topology and binding};
-      \node[box, below left=of coord] (sem) {Semantic adapters\\device-specific control};
-      \node[box, below right=of coord] (back) {Physical backends\\local or remote};
-      \draw[->] (dut) -- node[right]{configuration/control} (fpga);
-      \draw[->] (fpga) -- (coord);
-      \draw[->] (coord) -- (sem);
-      \draw[->] (sem) -- node[below]{backend semantics} (back);
-      \draw[->, dashed] (fpga.east) to[out=0,in=155]
-        node[above, sloped]{coherent data path} (back.north);
-      \draw[->, dashed] (back.west) to[out=205,in=0]
-        node[below, sloped]{completion visibility} (fpga.south east);
-    \end{tikzpicture}}
-    \caption{\sys presents a local PCIe interface while software defines the
-    logical topology and backend binding. Solid arrows represent control and
-    semantic events; dashed arrows represent the separately optimized data path.}
+    \includegraphics[width=\textwidth]{figures/system_architecture.pdf}
+    \caption{\sys architecture. The DUT accesses a logical PCIe interface
+    implemented by generic FPGA mechanisms. Host software owns topology and
+    device semantics, while a selected physical backend executes device
+    operations. Orange arrows carry control and metadata; blue arrows carry DMA
+    payload and writebacks without traversing the semantic event channel.}
     \label{fig:overview}
-\end{figure}
+    \Description{A DUT connects through a generic FPGA front-end to host
+    coordination software and a real NVMe or Ethernet backend. Control and DMA
+    paths are shown separately.}
+\end{figure*}
+
+\subsection{Three Planes and the SDN Analogy}
+\label{sec:planes}
+
+The architecture separates three responsibilities, following the distinction
+between applications, control, and forwarding in software-defined networking
+(SDN)~\cite{onf2014architecture}. In \sys, the \emph{software plane} is the
+DUT's OS and native drivers, which consume a device interface. The
+\emph{control plane} constructs that interface, binds logical endpoints to
+backends, and mediates configuration and device control. Its mechanisms span
+the FPGA front-end and host coordinator. The \emph{data plane} comprises the
+physical backends and the paths through which they exchange payload with DUT
+memory. These are functional responsibilities, not three physical machines;
+host software in the control plane is distinct from DUT software in the
+software plane.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.92\textwidth]{figures/three_planes.pdf}
+    \caption{SDN-inspired separation of peripheral access. Control
+    virtualization makes the logical view and binding configurable, while
+    selective passthrough retains execution by a physical backend after required
+    adaptation. Payload movement follows an independently realized data path.
+    Physical execution improves behavioral fidelity for the exposed operations,
+    but does not imply direct-attachment timing or PCIe link fidelity.}
+    \label{fig:planes}
+    \Description{The DUT software plane consumes a virtual device interface.
+    The control plane combines virtualization with selective passthrough. The
+    data plane connects DUT memory to a real NVMe or Ethernet backend.}
+\end{figure*}
+
+The SDN analogy concerns programmable control over a separately realized data
+path. The DUT software plane plays the role of a service consumer, but its
+interface remains a native device protocol rather than an SDN application API.
+The analogy also has a limit: a device submission refers to queues, DMA buffers,
+and ownership transitions. Routing an access to the correct backend is
+insufficient unless these stateful dependencies remain coherent.
+
+Within the control plane, \emph{control virtualization} creates the logical
+configuration and mediates state that differs from the physical backend.
+\emph{Control passthrough} retains physical execution of compatible operations,
+after any required address or protocol adaptation. The two responsibilities
+can coexist for one endpoint. Here passthrough denotes use of the real device,
+not transparent forwarding of every register access or full PCIe function
+assignment. A direct DMA path is a separate choice: payload can bypass the
+software proxy even when submission control is mediated.
 
 \subsection{Dual Decoupling}
 
-Table~\ref{tab:decoupling} separates the two mechanisms. Device-presentation--
-backend-implementation decoupling answers \emph{what device does the DUT see
+Table~\ref{tab:decoupling} separates the two mechanisms. Decoupling device
+presentation from backend implementation answers \emph{what device does the DUT see
 and which backend implements it?} Control-semantics--data-path decoupling
 answers \emph{which operations require semantic mediation and how do payload
 bytes move?} Neither alone is sufficient. The first without the second creates
 a configurable view whose software proxy may become the data bottleneck. The
 second without the first accelerates transfer but leaves device identity and
 placement fixed.
+The three planes identify responsibilities, whereas dual decoupling identifies
+the architectural freedoms between them. The coherence rules below constrain
+both freedoms.
 
 \begin{table}[t]
 \centering

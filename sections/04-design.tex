@@ -1,6 +1,25 @@
 \section{Design}
 \label{sec:design}
 
+The design places a configurable device boundary between the native driver and
+the physical backend. Topology and configuration establish that boundary;
+semantic mediation and DMA realization preserve it during I/O. The following
+mechanisms enforce the three coherence invariants in
+Section~\ref{sec:overview} while retaining a generic FPGA interface.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/coherence_protocols.pdf}
+    \caption{The three ordering contracts that preserve one driver-visible
+    device across distributed state. In each panel, downward arrows denote the
+    required happens-before order; the final green event may become visible only
+    after the preceding state transition.}
+    \label{fig:coherence}
+    \Description{Three sequences show configuration and route update before
+    write completion, queue stabilization and address translation before a
+    physical doorbell, and data visibility before completion and interrupt.}
+\end{figure*}
+
 \subsection{Logical Topology Construction}
 
 The software back-end starts from a topology specification that lists enabled
@@ -10,6 +29,9 @@ and device identity, class code, BAR shape, and the capabilities that \sys can
 faithfully implement. Capabilities are promises: for example, the current NIC
 template omits MSI-X because the prototype implements a shared level interrupt
 rather than a virtual MSI-X table and vector remapper.
+The selectable view is therefore constrained by both the semantic adapter and
+the physical backend. Changing an identity field alone cannot make a backend
+implement a different device protocol.
 
 Topology realization produces two coupled artifacts. A compact ECAM image is
 copied into FPGA-visible shadow memory, and a route table maps assigned BAR
@@ -55,6 +77,13 @@ NIC adapter understands ring bases and lengths, descriptor buffer addresses,
 tail updates, reset behavior, and interrupt cause/mask registers. Common
 dispatch and transport do not make unlike devices semantically interchangeable.
 
+This boundary determines which operations require virtualization. State that
+contains DUT addresses or affects virtual configuration, ownership, or interrupt
+visibility requires mediation. Operations whose semantics remain valid at the
+backend can retain physical execution after this adaptation. Bypassing a
+required translation would violate the device contract even if it reduced
+control latency.
+
 \subsection{DMA Data-Path Realization}
 
 \sys separates address retargeting from byte movement. On submission, a semantic
@@ -94,3 +123,5 @@ measured; the intended hypothesis is that it grows with generic capacity rather
 than with duplicated device protocol engines. The 1/2/4/8/13-slot synthesis
 sweep in Section~\ref{sec:evaluation} is the experiment that can turn this
 hypothesis into a quantitative scalability claim.
+The evaluation therefore examines native-driver compatibility and control/data
+cost separately from the unmeasured capacity-scaling hypothesis.

@@ -1,6 +1,41 @@
 \section{Discussion and Limitations}
 \label{sec:discussion}
 
+\paragraph{Configurability and fidelity.}
+Virtualization and passthrough contribute different properties to peripheral
+validation. Virtualization lets the user select the exposed hierarchy,
+capabilities, and backend bindings, within the provisioned capacity and
+supported device semantics. Physical execution supplies an independent
+controller and firmware implementation for the operations that reach the
+backend. The resulting fidelity has several dimensions: compatibility of the
+driver-visible protocol, coverage of physical-device behavior, and fidelity of
+timing and concurrency. Native-driver success supports the first for the tested
+workloads; it does not establish the other two in full.
+
+More mediation provides additional points at which to observe or modify
+interaction, but also increases adapter state, processing cost, and the risk
+of masking device behavior. For example, capability filtering removes
+unsupported interrupt modes, while descriptor translation and delayed doorbell
+forwarding can change queue occupancy and race exposure. More passthrough
+reduces this intervention but restricts the exposed interface to semantics and
+address domains that the backend can safely consume. It also ties validation
+coverage to the available physical devices. \sys places the boundary at the
+operations needed to preserve the logical device contract; its configurability
+does not imply arbitrary identities, features, or fault scenarios.
+
+\paragraph{Choosing and evaluating the boundary.}
+For OS bring-up and functional I/O validation, a configurable view backed by
+real execution can exercise native drivers across device bindings. Experiments
+on precise interrupt timing, queue races, or link behavior require a more direct
+reference path and an explicit account of mediation effects. A controlled
+comparison should hold the DUT, backend, workload, and exposed capabilities
+constant while varying only eligible control mediation and payload paths.
+It should report configuration coverage, correctness under reset and concurrent
+I/O, control and tail latency, throughput, host CPU cost, and FPGA resources.
+The present measurements characterize individual paths; they do not establish
+an optimal tradeoff. Configurable fault injection is a possible use of the
+mediation boundary, but remains outside the demonstrated functionality.
+
 \paragraph{Validation scope.}
 \sys validates enumeration, driver initialization, runtime control, DMA, and
 interrupt handling against a physical backend. Because it terminates the

@@ -3,7 +3,9 @@
 
 \subsection{FPGA Prototyping Infrastructure}
 
-FASED separates a target DRAM model from its FPGA host implementation and makes
+FireSim supplies cycle-exact, FPGA-accelerated full-system simulation and
+configurable scale-out models~\cite{karandikar2018firesim}. FASED separates a
+target DRAM model from its FPGA host implementation and makes
 model timing parameters configurable without rebuilding the complete target
 \cite{biancolin2019fased}. LEAP provides reusable services and latency-
 insensitive interfaces for FPGA applications \cite{fleming2014leap}. RIFFA
@@ -13,6 +15,17 @@ decoupling. \sys applies that principle to a different object: a real
 peripheral subsystem that a processor DUT discovers and operates with its
 native device driver. Its challenge includes the coupled configuration, BAR,
 queue, DMA, completion, and interrupt contract.
+
+\subsection{Modular Full-System Simulation}
+
+SimBricks links simulators for machines, networks, and devices through explicit
+component interfaces and synchronized communication
+channels~\cite{li2022simbricks}. It can integrate existing NIC and switch RTL
+models, making modular simulation a strong option when a suitable model exists.
+\sys addresses the complementary case in which a processor prototype must run
+an unmodified native driver against a physical peripheral. This trades the
+controllability of a device model for execution by real controller hardware and
+firmware, while giving up cycle-exact timing across the mediated boundary.
 
 \subsection{Modular and Networked FPGA Systems}
 
@@ -39,8 +52,8 @@ enumeration through native I/O.
 \subsection{PCIe Virtualization, Disaggregation, and Composable Fabrics}
 
 Device passthrough and composable PCIe fabrics can assign physical functions or
-fabric-attached resources to hosts, and PCIe switches can route those functions
-between hosts and devices. Their control plane operates on real PCIe functions
+fabric resources to hosts; PCIe switches can route those functions between
+hosts and devices. Their control plane operates on real PCIe functions
 and links; the primary abstraction is resource assignment in the fabric.
 \sys instead constructs a logical configuration hierarchy at an FPGA prototype
 boundary and may adapt commands and DMA addresses before a physical backend

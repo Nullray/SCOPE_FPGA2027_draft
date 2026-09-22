@@ -1,298 +1,211 @@
 \section{Evaluation}
 \label{sec:evaluation}
 
-We evaluate SCOPE as a method for software-defined peripheral composition. The
-questions are: (1) can a fixed FPGA mechanism expose different logical
-subsystems through software configuration, (2) do the two decouplings preserve
-native-driver operation, (3) what overhead is introduced by control-semantic
-mediation, and (4) which claims are supported by measurements versus
-implementation evidence or planned experiments?
+We evaluate four questions. First, can one FPGA interface expose independently
+configured logical endpoints while the DUT software remains unchanged? Second,
+does semantic mediation preserve enough of the native device contract for Linux
+drivers to perform I/O? Third, what latency does control mediation introduce?
+Fourth, can payload transfer use a path whose performance is close to direct
+access to the same backend? The experiments distinguish functional
+compatibility from timing fidelity; successful I/O does not imply that mediated
+and direct attachment have identical timing.
 
-\subsection{Experimental Setup and Reporting Boundary}
+\subsection{Experimental Setup}
 
-Table~\ref{tab:platform} records the platform facts needed to interpret the
-measurements. The reported results combine two measurement families. Proxy
-Forwarding measures the latency visible at the DUT when a BAR transaction is
-sent through the FPGA event path and host coordinator. Direct Control measures
-the requester-visible MMIO write path without the semantic proxy. They are
-therefore not interchangeable metrics. The same distinction applies to the
-separate NVMe BAR-write/doorbell experiment: its effective submission includes
-queue preparation and semantic translation and is not a device-internal
-completion time.
+The prototype instantiates the generic interface on a XiangShan RISC-V FPGA
+system connected to an x86 host. Before DUT enumeration, a QEMU coordinator
+selects the active logical endpoints and binds them to physical backends. The
+FPGA provisions a bounded configuration and routing capacity, while endpoint
+semantics reside in host software. The evaluated NIC exposes one queue pair and
+legacy INTx.
+
+Table~\ref{tab:platform} records the platform and measurement boundaries. Proxy
+Forwarding measures a DUT-visible BAR transaction through the FPGA event path
+and host coordinator. Direct Control measures a requester-visible MMIO write
+without the semantic proxy. The separate NVMe submission measurement includes
+queue inspection and address translation before the physical doorbell. These
+latencies therefore describe different operations and are reported separately.
 
 \begin{table}[t]
 \centering
-\caption{Confirmed platform facts and reporting boundary.}
+\caption{Prototype configuration and evaluation boundary.}
 \label{tab:platform}
 \small
 \begin{tabular}{@{}p{0.25\columnwidth}p{0.67\columnwidth}@{}}
 \toprule
-Item & Confirmed configuration \\
+Item & Configuration \\
 \midrule
-DUT & XiangShan RISC-V FPGA prototype; current evaluation runs the DUT at
-50\,MHz with a standard Linux kernel/driver stack. \\
-FPGA platform & NM37/Nanhu-G prototype flow based on an AMD/Xilinx VU37P
-device; a VCU128 VU37P flow is the compatible reference platform. \\
-Host/control plane & x86 host running the QEMU \texttt{scope-fpga-vswitch}
-manager and a Xilinx XDMA driver. \\
-Logical devices & QEMU-generated PCIe hierarchy with a virtual NVMe endpoint
-(\texttt{8086:4802}) and an Intel 82580 Ethernet backend
-(\texttt{8086:150e}, \texttt{igb}). \\
-Interface boundary & ECAM, BAR, DMA, completion, and aggregate legacy INTx;
-the physical PCIe PHY/link layer is outside the claim. \\
-Software boundary & The reported path uses XDMA and the Linux
-\texttt{nvme}/\texttt{igb} drivers. QDMA, SPDK, and DPDK variants are not mixed
-into these measurements. \\
-Workloads & NVMe read measurements and single-queue Ethernet functional/
-throughput tests; exact command lines, repetitions, and error bars remain part
-of the reproducibility record to be added. \\
+DUT & XiangShan RISC-V FPGA prototype at 50\,MHz, running Linux and standard
+kernel drivers \\
+FPGA platform & NM37/Nanhu-G flow on an AMD/Xilinx VU37P device \\
+Host & x86 system running the QEMU coordinator and Xilinx XDMA driver \\
+Backends & NVMe (logical ID \texttt{8086:4802}) and Intel 82580 Ethernet
+(\texttt{8086:150e}, \texttt{igb}) \\
+Virtualized boundary & ECAM, BAR control, DMA addresses, completion state, and
+aggregate legacy INTx \\
+Excluded boundary & PCIe PHY/link behavior, MSI/MSI-X, AER, hotplug, and
+multi-queue scaling \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Claim-to-Evidence Ledger}
+\subsection{Configuration and Native-Driver Compatibility}
 
-Table~\ref{tab:evidence} is the paper's evidence boundary. An implementation
-claim is supported by the corresponding source module or design contract; a
-performance claim is reported only when a measurement record exists; and a
-planned item is not used as evidence for the current conclusion.
+The functional experiment holds the FPGA bitstream and DUT software constant
+and changes the enabled endpoint and backend binding in the host configuration.
+Linux enumerates the resulting hierarchy and binds its standard \texttt{nvme}
+or \texttt{igb} driver. The NVMe path completes queue setup and storage reads;
+the NIC path completes link setup, address configuration, ping, and bidirectional
+packet transfer. These tests exercise configuration, runtime control, translated
+DMA, completion, and interrupt delivery. They demonstrate two device types in
+separate configurations. Simultaneous NVMe and NIC operation has not been
+measured and is not inferred from the independent runs.
 
-\begin{table*}[t]
-\centering
-\caption{Mapping from paper claims to implementation evidence, measurements,
-and remaining work.}
-\label{tab:evidence}
-\small
-\begin{tabular}{@{}p{0.18\textwidth}p{0.29\textwidth}p{0.30\textwidth}p{0.15\textwidth}@{}}
-\toprule
-Claim & Implementation/design evidence & Measurement evidence & Status \\
-\midrule
-Software-defined composition &
-Generic FPGA ECAM/route/event mechanisms and QEMU startup backend
-configuration; the hierarchy is fixed while endpoint bindings are selected in
-software. &
-NVMe and 82580 configurations have been exercised through the standard Linux
-drivers; a complete configuration matrix is recorded as a required artifact. &
-Implemented; matrix completion pending \\
-\addlinespace
-Device-presentation--backend-implementation decoupling &
-Logical BDF/configuration shadow is separated from host BDF and physical BAR
-ownership. &
-The distinction is architectural; no latency number is used to prove it. &
-Implemented by design \\
-\addlinespace
-Control-semantics--data-path decoupling &
-Per-device semantic adapters translate queue/control state, while coherent DMA
-provides a separate payload path. &
-128-KiB P2P sequential-read result reaches 99.1\% of the host-attached
-baseline. &
-Measured \\
-\addlinespace
-Control overhead &
-Ordered FPGA event, host dispatch, semantic mediation, and response paths. &
-Proxy BAR-write RTT: 29.92\,\si{\micro\second} (NVMe) and
-28.06\,\si{\micro\second} (NIC); separate NVMe BAR write/doorbell:
-30.15/61.41\,\si{\micro\second}; Direct Control values are listed below. &
-Measured; path labels fixed here \\
-\addlinespace
-Completion and interrupt coherence &
-Queue/DMA visibility precedes completion publication; aggregate legacy INTx is
-owned by the host coordinator. &
-100/100 trigger-and-clear trials succeeded without timeout or unexpected event;
-adjusted injection latency is 956.81\,\si{\nano\second}. &
-Measured \\
-\addlinespace
-Generic endpoint scaling &
-The RTL exposes a parameterized route/ECAM capacity and QEMU keeps endpoint
-semantic state in software. &
-No 1/2/4/8/13 synthesis sweep is included yet. &
-Planned P1 experiment \\
-\addlinespace
-Concurrent composition &
-The manager owns independent backend objects and polling/dispatch state. &
-An NVMe+NIC simultaneous workload has not been included in the current record. &
-Planned P1 experiment \\
-\bottomrule
-\end{tabular}
-\end{table*}
+\subsection{Control-Path Cost}
 
-\subsection{Software-Defined Composition and Driver Compatibility}
-
-The core functional experiment holds the FPGA bitstream and DUT software
-constant while changing only the QEMU backend configuration. Each active
-configuration presents the same logical PCIe contract to Linux; only the
-enabled endpoint set and backend binding change.
-
-\begin{table}[t]
-\centering
-\caption{Configuration-only composition experiment.}
-\label{tab:composition}
-\small
-\begin{tabular}{@{}p{0.22\columnwidth}p{0.28\columnwidth}p{0.36\columnwidth}@{}}
-\toprule
-Configuration & Driver/workload & Evidence boundary \\
-\midrule
-NVMe endpoint & Linux \texttt{nvme}; queue setup and storage I/O &
-Measured functional path; use NVMe data results below \\
-82580 endpoint & Linux \texttt{igb}; link setup, DHCP/ping, packet I/O &
-Measured functional path; throughput values below \\
-NVMe + 82580 & Both standard drivers active concurrently &
-Required to close the composition claim; not yet measured \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The first two rows establish that enumeration alone is not the target: the
-driver initializes queues, translated DMA becomes visible, completions return,
-and the backend produces real I/O. The third row is deliberately marked as
-pending rather than being inferred from independent single-device runs.
-
-\subsection{Control-Path Measurements}
-
-Table~\ref{tab:control} separates the reported measurements by endpoint and
-path. Proxy Forwarding values are DUT-observed BAR-write round trips, measured
-over repeated transactions in the earlier evaluation. The 30.15/61.41\,\si{\micro\second}
-values are from a separate NVMe device test in which the second number includes
-effective submission preparation; neither should be merged with the
-Proxy-Forwarding RTT. Direct Control values are requester-visible MMIO writes.
+Table~\ref{tab:control} separates measurements by requester and timing boundary.
+Proxy Forwarding incurs tens of microseconds because it crosses the FPGA event
+channel and invokes the host coordinator. The NVMe semantic-submission value is
+larger than its BAR-write value because the adapter must observe the queue entry,
+translate DMA references, and prepare the physical submission. Direct Control
+provides a nanosecond-scale reference for an MMIO path that does not perform
+those semantic operations; it is not an ablation in which an arbitrary mediated
+submission can be safely bypassed.
 
 \begin{table*}[t]
 \centering
-\caption{Control measurements with their endpoint and timing boundary.}
+\caption{Control measurements and their timing boundaries.}
 \label{tab:control}
 \small
-\begin{tabular}{@{}p{0.24\textwidth}p{0.28\textwidth}p{0.17\textwidth}p{0.20\textwidth}@{}}
+\begin{tabular}{@{}p{0.23\textwidth}p{0.31\textwidth}p{0.17\textwidth}p{0.20\textwidth}@{}}
 \toprule
-Path & Endpoint and operation & Value & Interpretation \\
+Path & Timed operation & Value & Interpretation \\
 \midrule
-Proxy Forwarding & NVMe BAR-write round trip observed by the DUT &
-29.92\,\si{\micro\second} & FPGA event $\rightarrow$ host coordinator/backend
-$\rightarrow$ FPGA response; not device completion \\
-Proxy Forwarding & Intel NIC BAR-write round trip observed by the DUT &
-28.06\,\si{\micro\second} & Same control boundary as the NVMe value \\
-Semantic NVMe test & NVMe BAR write &
-30.15\,\si{\micro\second} & Separate wall-clock measurement; do not compare as
-an identical endpoint to the proxy RTT \\
-Semantic NVMe test & Effective doorbell submission &
-61.41\,\si{\micro\second} & Includes queue visibility and address translation
-before physical submission \\
-Direct Control (ARM A53) & FPGA-side NVMe MMIO write &
-1136.00\,\si{\nano\second} & Requester-visible direct path \\
-Direct Control (ARM A53) & Host-side NVMe MMIO write &
-1295.11\,\si{\nano\second} & +14.0\% relative to the FPGA-side value \\
+Proxy Forwarding & NVMe BAR-write round trip observed by DUT &
+29.92\,\si{\micro\second} & FPGA event, host handling, and FPGA response \\
+Proxy Forwarding & 82580 BAR-write round trip observed by DUT &
+28.06\,\si{\micro\second} & Same boundary as the NVMe proxy value \\
+NVMe semantic path & BAR write / effective doorbell submission &
+30.15 / 61.41\,\si{\micro\second} & Separate wall-clock experiment; submission
+includes queue and address processing \\
+Direct Control (ARM A53) & FPGA-side / host-side NVMe MMIO write &
+1136.00 / 1295.11\,\si{\nano\second} & Host-side path is 14.0\% higher \\
 Direct Control (ARM A53) & Host-side NIC MMIO write &
-1143.38\,\si{\nano\second} & Direct host-side reference \\
+1143.38\,\si{\nano\second} & Requester-visible direct-path reference \\
 Direct Control (RocketChip) & FPGA-side / host-side NVMe MMIO write &
-1138.57 / 1616.35\,\si{\nano\second} & Separate DUT implementation; not merged
-with ARM values \\
+1138.57 / 1616.35\,\si{\nano\second} & Separate DUT implementation \\
 Direct Control (RocketChip) & Host-side NIC MMIO write &
-1432.90\,\si{\nano\second} & Direct host-side reference \\
+1432.90\,\si{\nano\second} & Requester-visible direct-path reference \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\subsection{End-to-End NVMe Data Path}
+\subsection{NVMe Data Path}
 
-Table~\ref{tab:nvme} reports the confirmed read-side comparison. The
-on-board/P2P path is compared with a host-attached baseline under the same DUT
-workload. The 99.1\% and 98.5\% ratios are retained because they express the
-data-path result without implying that control latency is zero.
+Table~\ref{tab:nvme} compares the on-board/P2P path with the host-attached path
+under the recorded DUT read workloads. Sequential-read bandwidth retains
+99.1\% of the host-attached result, and random-read throughput retains 98.5\%.
+This contrast with the control-path latency supports the architectural choice
+to keep payload movement off the software event channel.
 
 \begin{table}[t]
 \centering
-\caption{Confirmed NVMe read-side results observed by the DUT.}
+\caption{NVMe read performance observed by the DUT.}
 \label{tab:nvme}
 \small
-\begin{tabular}{@{}lrrr@{}}
+\begin{tabularx}{\columnwidth}{@{}Xrrr@{}}
 \toprule
-Workload & Host-attached & On-board/P2P & Ratio \\
+Workload & Host & P2P & Ratio \\
 \midrule
 128-KiB sequential read (\si{\mega\byte\per\second}) & 2620.5 & 2596.3 & 99.1\% \\
 4-KiB random read (IOPS) & 240372.3 & 236777.4 & 98.5\% \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
-The DUT runs at 50\,MHz and the recorded read tests use queue depth one, so
-these results primarily characterize the present control and software
-submission envelope. Write-side values, block-size sweeps, and queue-depth
-sweeps must be rerun with the same direct, on-board, and host-remote baselines
-before a general write-performance claim is made.
+The recorded tests cover reads at queue depth one. They do not establish write
+performance, queue-depth scaling, or equivalence across local and remote
+backends. Those dimensions require a controlled sweep with the same device,
+requester, workload, repetition count, and timing boundary.
 
-\begin{table}[t]
+\subsection{NIC Data Path}
+
+The single-queue 82580 backend sustains 56.65 and
+46.82\,\si{\mega\bit\per\second} for TCP in the DUT-to-peer and peer-to-DUT
+directions, respectively. UDP reaches 4.90 and
+7.75\,\si{\mega\bit\per\second}, and ping RTT is
+2.80\,\si{\milli\second}. These results establish bidirectional descriptor
+translation, payload transfer, completion, and interrupt handling. Without a
+matched direct/on-board NIC baseline and the missing workload parameters, they
+do not support a line-rate or relative-performance claim.
+
+\subsection{Completion and Interrupt Ordering}
+
+Across 100 trigger-and-clear trials, the DUT observed the expected interrupt
+transition without timeout or an unexpected event. After subtracting the
+measurement baseline, interrupt injection latency is
+956.81\,\si{\nano\second}. Together with successful NVMe and NIC transfers,
+this result checks the externally visible consequence of the ordering rules:
+the driver sees returned data and completion state before it is notified. The
+experiment does not independently expose every internal happens-before edge;
+Figure~\ref{fig:coherence} states the design contract that the implementation
+must maintain.
+
+\subsection{Limits of the Current Evaluation}
+
+The functional and performance results establish single-endpoint operation for
+the tested NVMe and NIC configurations. They do not quantify simultaneous
+multi-device interference or the resource slope of increasing the provisioned
+endpoint capacity. Consequently, the paper claims a parameterized generic
+mechanism, not measured 13-device scalability. Repeated workload runs with
+dispersion, a matched NIC baseline, and synthesis at multiple capacities are
+needed before making stronger throughput, tail-latency, or FPGA-scaling claims.
+
+\subsection{Planned Measurements (Placeholders)}
+
+Tables~\ref{tab:measurement-placeholders} and~\ref{tab:resource-plan} retain the
+planned experiments as authoring placeholders. Entries marked ``pending'' are
+not measurements and are not used by the abstract or conclusions.
+
+\begin{table*}[t]
 \centering
-\caption{P1 NVMe experiment matrix to complete the fair baseline.}
-\label{tab:nvme-plan}
+\caption{Placeholder matrix for matched performance and composition experiments.}
+\label{tab:measurement-placeholders}
 \small
-\begin{tabular}{@{}lll@{}}
+\begin{tabular}{@{}p{0.19\textwidth}p{0.26\textwidth}p{0.25\textwidth}p{0.20\textwidth}@{}}
 \toprule
-Dimension & Required levels & Paths \\
+Experiment & Controlled dimension & Compared paths & Required report \\
 \midrule
-Operation & read / write & direct, on-board/P2P, host-remote/proxy \\
-Block size & 4\,KiB / 16\,KiB / 128\,KiB / 1\,MiB & same workload and device \\
-Queue depth & 1 / 4 / 16 / 32 & repeated runs with dispersion \\
-Report & bandwidth, IOPS, latency & median, tail, and run count \\
+NVMe read/write sweep & 4/16/128/1024\,KiB; QD 1/4/16/32 &
+host-attached, on-board/P2P, host-remote/proxy &
+bandwidth, IOPS, median/tail latency, repetitions \\
+NIC baseline & protocol, direction, message size, stream count &
+direct/on-board and mediated backend &
+throughput, loss, RTT distribution, host CPU cost \\
+Concurrent composition & NVMe-only, NIC-only, NVMe+NIC &
+same bitstream and endpoint bindings &
+per-device slowdown, correctness, interrupt behavior \\
+Virtualization/passthrough ablation & eligible control mediation and payload path &
+same DUT, device, capabilities, and workload &
+control/tail latency and functional coverage \\
 \bottomrule
 \end{tabular}
-\end{table}
-
-\subsection{Network Functionality and Performance}
-
-The single-queue 82580 backend reaches 56.65\,\si{\mega\bit\per\second} from the
-DUT to a peer and 46.82\,\si{\mega\bit\per\second} in the reverse direction for
-TCP. The corresponding UDP rates are 4.90 and 7.75\,\si{\mega\bit\per\second},
-and ping RTT is 2.80\,\si{\milli\second}. These
-values establish a translated TX/RX path, not line-rate Ethernet. Datagram
-size, stream count, loss rate, and a direct/on-board NIC baseline must accompany
-the final result; they are not inferred from the throughput numbers.
+\end{table*}
 
 \begin{table}[t]
 \centering
-\caption{NIC results and missing fairness fields.}
-\label{tab:nic}
-\small
-\begin{tabular}{@{}p{0.37\columnwidth}p{0.28\columnwidth}p{0.23\columnwidth}@{}}
-\toprule
-Metric & Current record & Required addition \\
-\midrule
-TCP DUT$\rightarrow$peer / peer$\rightarrow$DUT & 56.65 / 46.82\,\si{\mega\bit\per\second} &
-same stream count and direct baseline \\
-UDP DUT$\rightarrow$peer / peer$\rightarrow$DUT & 4.90 / 7.75\,\si{\mega\bit\per\second} &
-datagram size and loss rate \\
-Ping RTT & 2.80\,\si{\milli\second} & repeated samples and percentile \\
-Concurrent NVMe+NIC & not recorded & simultaneous storage and network load \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{FPGA Cost and Capacity Scaling}
-
-The implementation evidence supports a qualitative claim: adding a supported
-endpoint adds generic route/configuration state and a software adapter, rather
-than copying a complete device controller into RTL. It does not yet support a
-quantitative resource-scaling claim. The required synthesis experiment is
-shown in Table~\ref{tab:resource-plan}; every row must use the same Vivado
-constraints and report both absolute resources and the incremental slope.
-
-\begin{table}[t]
-\centering
-\caption{P1 FPGA capacity experiment.}
+\caption{Placeholder for the FPGA capacity synthesis sweep.}
 \label{tab:resource-plan}
 \small
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 Endpoint slots & LUT & FF & BRAM/URAM & Fmax \\
 \midrule
-1 & pending & pending & pending & pending \\
-2 & pending & pending & pending & pending \\
-4 & pending & pending & pending & pending \\
-8 & pending & pending & pending & pending \\
+1  & pending & pending & pending & pending \\
+2  & pending & pending & pending & pending \\
+4  & pending & pending & pending & pending \\
+8  & pending & pending & pending & pending \\
 13 & pending & pending & pending & pending \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-Until this sweep is complete, we state only that the architecture moves
-device-specific protocol state to software and provisions a bounded generic
-capacity. It would be incorrect to equate the 13-entry route table with a
-measured 13-device scalability result.

@@ -15,6 +15,13 @@ the method that realizes it:
 Configuration/route coherence, submission/DMA coherence, and data/completion
 coherence preserve native-device behavior after the split.
 
+The paper proceeds directly from Design to Evaluation; there is no separate
+Implementation section. Essential platform facts are in the experimental setup.
+The overview explains the SDN-inspired software/control/data planes, and the
+discussion distinguishes user configurability, physical-device execution, and
+timing fidelity. FIGURE_PLAN.md lists the required figures and reusable material
+from 思路.pptx, including discrepancies that must be resolved before plotting.
+
 ## Evidence boundary
 
 The paper distinguishes three kinds of statements:

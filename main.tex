@@ -11,8 +11,6 @@
 \usepackage{xspace}
 \usepackage{enumitem}
 \usepackage{tabularx}
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning}
 
 \newcommand{\sys}{\textsc{SCOPE}\xspace}
 \newcommand{\tax}{\emph{peripheral integration tax}\xspace}
@@ -36,31 +34,25 @@
 FPGA prototypes must run production operating systems and drivers against real
 peripherals, yet the devices available to a design under test (DUT) are usually
 fixed by board connectors, host placement, and device-specific FPGA logic.
-Remote access alone does not solve this problem: an unmodified DUT software
-stack must still discover a legal PCIe topology, issue native register and queue
-operations, expose DMA buffers, and observe ordered completions. We present
-\sys, a software-defined peripheral subsystem that makes the DUT-visible device
-composition and backend binding software decisions. \sys realizes this ability
-through two explicit separations: device presentation from backend
-implementation, and control semantics from the data path. A generic FPGA
-front-end serves a shadowed configuration hierarchy, routes BAR accesses,
-transports control events, and injects interrupts. A host software back-end
-owns the authoritative topology and device state, translates device-specific
-submission semantics and DMA addresses, and binds each logical endpoint to a
-physical backend. Coherence rules across configuration, routing, DMA visibility,
-and completion preserve the native device contract after these functions are
-separated. The pre-silicon prototype supports a fixed hierarchy with software-
-selected NVMe and Intel 82580 backends through standard Linux drivers. Confirmed
-measurements distinguish the control paths: DUT-observed Proxy Forwarding BAR
-write round trips are $29.92\,\si{\micro\second}$ for NVMe and
-$28.06\,\si{\micro\second}$ for the NIC, while a separate NVMe semantic-
-submission measurement reports $30.15\,\si{\micro\second}$ for a BAR write and
-$61.41\,\si{\micro\second}$ for an effective doorbell submission. In Direct
-Control, host-side NVMe MMIO is $1295.11\,\si{\nano\second}$ versus
-$1136.00\,\si{\nano\second}$ on the FPGA side (+14.0\%). For the data path,
-128-KiB sequential read reaches $2596.3\,\si{\mega\byte\per\second}$ on the
-on-board path versus $2620.5\,\si{\mega\byte\per\second}$ for the host-attached
-baseline (99.1\%).
+Remote access alone is insufficient because an unmodified DUT must discover a
+legal PCIe hierarchy and observe coherent register, queue, DMA, completion, and
+interrupt behavior. We present \sys, a software-defined peripheral subsystem
+that makes the DUT-visible composition and backend binding software choices.
+\sys separates device presentation from backend realization and separates
+control semantics from payload movement. A generic FPGA front-end provides
+configuration shadowing, BAR routing, event transport, DMA windows, and
+interrupt injection; host software owns the logical device state, translates
+device-specific submissions and addresses, and binds each endpoint to a
+physical backend. Three ordering invariants reconnect the separated functions:
+configuration with routing, submission with translated DMA state, and returned
+data with completion. A pre-silicon prototype runs standard Linux NVMe and Intel
+82580 drivers against physical backends. DUT-observed proxy BAR-write round
+trips are $29.92\,\si{\micro\second}$ for NVMe and
+$28.06\,\si{\micro\second}$ for the NIC. By keeping payload movement off this
+control path, 128-KiB sequential-read bandwidth reaches
+$2596.3\,\si{\mega\byte\per\second}$, or 99.1\% of the host-attached result.
+These results demonstrate configurable functional access while exposing the
+timing cost and fidelity boundary introduced by semantic mediation.
 \end{abstract}
 
 \ccsdesc[500]{Hardware~Reconfigurable logic and FPGAs}
@@ -75,7 +67,6 @@ baseline (99.1\%).
 \input{sections/02-background-motivation}
 \input{sections/03-overview}
 \input{sections/04-design}
-\input{sections/05-implementation}
 \input{sections/06-evaluation}
 \input{sections/07-related-work}
 \input{sections/08-discussion}

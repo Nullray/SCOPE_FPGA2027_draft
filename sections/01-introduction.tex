@@ -9,7 +9,8 @@ software device models are configurable and observable, but their usefulness is
 bounded by the fidelity of the modeled controller, firmware, timing, and DMA
 behavior.
 
-Attaching a real device preserves those behaviors, but usually makes the
+Attaching a real device retains its controller and firmware as participants in
+validation, but usually makes the
 validation environment rigid. The DUT can use only devices reachable through
 the prototype board and its host topology. Adding device types often requires
 device-specific RTL for configuration, register access, DMA, and interrupts.
@@ -34,6 +35,15 @@ selects which logical endpoints the DUT sees, binds them to local or remote
 physical backends, and chooses how their control semantics and DMA paths are
 realized. The bitstream provides stable mechanisms rather than a fixed device
 composition.
+
+The design balances two objectives of peripheral access. Virtualization gives
+the user control over the logical device view and backend binding. Passthrough
+retains execution by a physical controller, including the firmware and I/O
+effects exercised by the workload. These objectives meet at a semantic
+boundary: a configurable endpoint still has to issue commands that its backend
+can execute, and an adapter can alter the timing and behavior observed by the
+driver. \sys uses selective mediation to preserve this boundary, with
+functional fidelity and timing fidelity treated as distinct validation goals.
 
 \sys obtains this ability through \emph{dual decoupling}. First,
 \emph{device-presentation--backend-implementation decoupling} separates the
@@ -65,13 +75,16 @@ This paper makes three contributions:
     presentation--backend-implementation decoupling and control-semantics--
     data-path decoupling, with explicit coherence rules spanning enumeration,
     runtime control, DMA address translation, completion, and interrupts.
-    \item It implements the design for a RISC-V SoC FPGA prototype with real
+    \item It demonstrates the design on a RISC-V SoC FPGA prototype with real
     NVMe and Intel Ethernet backends, and evaluates native-driver compatibility,
-    control overhead, and data-path performance. FPGA resource scaling and
-    simultaneous multi-device operation are identified as experiments rather
-    than reported results until their measurement records are complete.
+    control overhead, data-path performance, and completion/interrupt ordering.
 \end{itemize}
 
 The current implementation targets pre-silicon FPGA prototyping. The same
 logical abstraction may be useful in post-silicon validation, but we treat that
 extension as future work rather than a demonstrated contribution.
+Section~\ref{sec:overview} develops the architectural separation,
+Section~\ref{sec:design} derives the mechanisms that preserve device semantics,
+and Section~\ref{sec:evaluation} evaluates their compatibility and cost.
+Section~\ref{sec:discussion} examines the resulting configurability--fidelity
+tradeoff.

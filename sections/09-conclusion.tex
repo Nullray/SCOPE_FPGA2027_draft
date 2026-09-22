@@ -5,7 +5,11 @@
 decision. Its method combines device-presentation--backend-implementation
 decoupling with control-semantics--data-path decoupling, and constrains the
 split with configuration--route, submission--DMA, and data--completion
-coherence. The prototype evidence shows that a standard Linux stack can
+coherence. Virtualization provides a user-configured device view while physical
+backends retain execution
+of the exposed operations. This combination trades mediation cost and altered
+timing for configurability, with fidelity bounded by the supported semantics.
+The prototype evidence shows that a standard Linux stack can
 enumerate and use real NVMe and Ethernet backends through a generic FPGA
 interface, while the measured control and data results expose the current
 performance envelope. A complete NVMe+NIC concurrency run, fair direct
