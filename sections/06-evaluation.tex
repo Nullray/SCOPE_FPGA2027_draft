@@ -50,6 +50,21 @@ LUTs (0.85\%), 14,749 fewer flip-flops (2.90\%), and 142 fewer 36-Kb BRAM tiles
 (11.72\%) than the original Root Port configuration. Percentages are relative
 to the total resource usage of the original configuration.
 
+% Declare the wide plot early so it can accompany the data-path subsection.
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/nvme_throughput.pdf}
+\caption{Sequential NVMe throughput versus fio transfer size across the three
+configurations. Points show three-run arithmetic means; error bars indicate
+the minimum and maximum.}
+\label{fig:nvme-throughput}
+\Description{Two panels compare sequential read and write throughput across
+six transfer sizes from 4 KiB to 1 MiB. Host-local read throughput closely
+tracks on-board throughput. Host-local write throughput falls further below
+the on-board baseline at 1 MiB. Host-remote throughput increases with transfer
+size but remains below the other configurations.}
+\end{figure*}
+
 \subsection{Control-Path Overhead}
 
 We characterize the cost of software-mediated NVMe access using a BAR-write
@@ -104,124 +119,156 @@ fault injection and observation of driver responses. The functional and
 fault-injection experiments evaluate this capability, while the next subsection
 examines sustained I/O performance across the three configurations.
 
-\subsection{NVMe Data Path}
 
-Table~\ref{tab:nvme} compares the on-board/P2P path with the host-attached path
-under the recorded DUT read workloads. Sequential-read bandwidth retains
-99.1\% of the host-attached result, and random-read throughput retains 98.5\%.
-This contrast with the control-path latency supports the architectural choice
-to keep payload movement off the software event channel.
 
-\begin{table}[t]
+\subsection{Data-Path Performance}
+\label{sec:data-path-performance}
+
+The control-path measurements show that software mediation increases the
+latency of individual control operations. We next examine whether this
+increase is accompanied by a comparable loss in sustained I/O throughput.
+We evaluate NVMe across on-board, host-local, and host-remote configurations
+using fio with direct I/O, a single job, and a queue depth of one. For each
+workload, we use the same workload parameters across the three configurations
+and report the mean over three 60-second runs.
+
+Table~\ref{tab:nvme} shows that host-local access preserves near-baseline read
+performance despite its software-mediated control path. For both 128-KiB
+sequential reads and 4-KiB random reads, performance differs from the on-board
+baseline by less than 2\%. Sequential and random write performance is lower
+by 4.4\% and 13.1\%, respectively. Host-remote access offers a different
+tradeoff: it enables the DUT to access a physical NVMe device on another host
+through its native NVMe driver. Its 128-KiB sequential read and write
+throughput reaches 49.1\% and 38.8\% of the on-board baseline, respectively.
+
+\begin{table}[!htb]
 \centering
-\caption{NVMe read performance observed by the DUT.}
+\caption{Representative NVMe workload performance across the three configurations.}
 \label{tab:nvme}
 \small
+\setlength{\tabcolsep}{3pt}
 \begin{tabularx}{\columnwidth}{@{}Xrrr@{}}
 \toprule
-Workload & Host & P2P & Ratio \\
+Workload & On-board & Host-local & Host-remote \\
 \midrule
-128-KiB sequential read (\si{\mega\byte\per\second}) & 2620.5 & 2596.3 & 99.1\% \\
-4-KiB random read (IOPS) & 240372.3 & 236777.4 & 98.5\% \\
+Sequential read, 128 KiB (MiB/s) & 13.282 & 13.520 & 6.518 \\
+Sequential write, 128 KiB (MiB/s) & 12.915 & 12.341 & 5.014 \\
+Random read, 4 KiB (IOPS) & 178.068 & 176.410 & 136.206 \\
+Random write, 4 KiB (IOPS) & 161.792 & 140.619 & 105.950 \\
 \bottomrule
 \end{tabularx}
+\par\smallskip
+\begin{minipage}{\columnwidth}
+\footnotesize
+Results are arithmetic means over three runs, each preceded by
+a 10-s warm-up. Reads access the raw namespace; writes overwrite
+a preinitialized 1-GiB ext4 file.
+\end{minipage}
 \end{table}
 
-The recorded tests cover reads at queue depth one. They do not establish write
-performance, queue-depth scaling, or equivalence across local and remote
-backends. Those dimensions require a controlled sweep with the same device,
-requester, workload, repetition count, and timing boundary.
 
-\subsection{NIC Data Path}
 
-The single-queue 82580 backend sustains 56.65 and
-46.82\,\si{\mega\bit\per\second} for TCP in the DUT-to-peer and peer-to-DUT
-directions, respectively. UDP reaches 4.90 and
-7.75\,\si{\mega\bit\per\second}, and ping RTT is
-2.80\,\si{\milli\second}. These results establish bidirectional descriptor
-translation, payload transfer, completion, and interrupt handling. Without a
-matched direct/on-board NIC baseline and the missing workload parameters, they
-do not support a line-rate or relative-performance claim.
+Figure~\ref{fig:nvme-throughput} extends this comparison across fio transfer sizes from 4 KiB to
+1 MiB. Host-local read throughput tracks the on-board baseline throughout
+the sweep, remaining within 4.1\%, while the write-throughput gap reaches
+18.4\% at 1 MiB. Host-remote throughput also increases with transfer size,
+reaching 11.81 MiB/s for reads and 8.20 MiB/s for writes at 1 MiB.
 
-\subsection{Configuration and Native-Driver Compatibility}
+These results show that software-mediated control need not impose a
+proportional penalty on sustained I/O performance: host-local reads remain
+close to the on-board baseline even though individual control operations
+are slower. Remote placement trades throughput for backend-location
+flexibility, allowing the DUT to access a physical NVMe device across hosts
+through its native software stack.
 
-The functional experiment holds the FPGA bitstream and DUT software constant
-and changes the enabled endpoint and backend binding in the host configuration.
-Linux enumerates the resulting hierarchy and binds its standard \texttt{nvme}
-or \texttt{igb} driver. The NVMe path completes queue setup and storage reads;
-the NIC path completes link setup, address configuration, ping, and bidirectional
-packet transfer. These tests exercise configuration, runtime control, translated
-DMA, completion, and interrupt delivery. They demonstrate two device types in
-separate configurations. Simultaneous NVMe and NIC operation has not been
-measured and is not inferred from the independent runs.
-
-\subsection{Completion and Interrupt Ordering}
-
-Across 100 trigger-and-clear trials, the DUT observed the expected interrupt
-transition without timeout or an unexpected event. After subtracting the
-measurement baseline, interrupt injection latency is
-956.81\,\si{\nano\second}. Together with successful NVMe and NIC transfers,
-this result checks the externally visible consequence of the ordering rules:
-the driver sees returned data and completion state before it is notified. The
-experiment does not independently expose every internal happens-before edge;
-Figure~\ref{fig:coherence} states the design contract that the implementation
-must maintain.
-
-\subsection{Limits of the Current Evaluation}
-
-The functional and performance results establish single-endpoint operation for
-the tested NVMe and NIC configurations. They do not quantify simultaneous
-multi-device interference or the resource slope of increasing the provisioned
-endpoint capacity. Consequently, the paper claims a parameterized generic
-mechanism, not measured 13-device scalability. Repeated workload runs with
-dispersion, a matched NIC baseline, and synthesis at multiple capacities are
-needed before making stronger throughput, tail-latency, or FPGA-scaling claims.
-
-\subsection{Planned Measurements (Placeholders)}
-
-Tables~\ref{tab:measurement-placeholders} and~\ref{tab:resource-plan} retain the
-planned experiments as authoring placeholders. Entries marked ``pending'' are
-not measurements and are not used by the abstract or conclusions.
-
+% Declare the wide evidence table ahead of its subsection for page-top placement.
 \begin{table*}[t]
 \centering
-\caption{Placeholder matrix for matched performance and composition experiments.}
-\label{tab:measurement-placeholders}
+\caption{Software-controlled NVMe fault injection and native-driver responses.}
+\label{tab:fault-injection}
 \small
-\begin{tabular}{@{}p{0.19\textwidth}p{0.26\textwidth}p{0.25\textwidth}p{0.20\textwidth}@{}}
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.13\textwidth}>{\raggedright\arraybackslash}p{0.25\textwidth}>{\raggedright\arraybackslash}p{0.31\textwidth}>{\raggedright\arraybackslash}X@{}}
 \toprule
-Experiment & Controlled dimension & Compared paths & Required report \\
+Fault scenario & \sys intervention & Native-driver evidence & Recovery / follow-up \\
 \midrule
-NVMe read/write sweep & 4/16/128/1024\,KiB; QD 1/4/16/32 &
-host-attached, on-board/P2P, host-remote/proxy &
-bandwidth, IOPS, median/tail latency, repetitions \\
-NIC baseline & protocol, direction, message size, stream count &
-direct/on-board and mediated backend &
-throughput, loss, RTT distribution, host CPU cost \\
-Concurrent composition & NVMe-only, NIC-only, NVMe+NIC &
-same bitstream and endpoint bindings &
-per-device slowdown, correctness, interrupt behavior \\
-Virtualization/passthrough ablation & eligible control mediation and payload path &
-same DUT, device, capabilities, and workload &
-control/tail latency and functional coverage \\
+Initialization timeout &
+\texttt{real\_csts=0x00000001}\newline
+\texttt{guest\_csts=0x00000000}\newline
+\texttt{reason=guest\_reply\_override} &
+\texttt{Device not ready; aborting initialisation, CSTS=0x0} &
+Injection released; manual reprobe; 10 subsequent reads succeed. \\
+\addlinespace
+SQ doorbell drop &
+\texttt{action=DROP}\newline
+\texttt{match\_index=10}\newline
+\texttt{real\_bar\_store=false} &
+\texttt{I/O 587 QID 1 timeout, aborting}\newline
+\texttt{I/O 587 QID 1 timeout, reset controller} &
+Queues rebuilt; subsequent reads succeed; IRQ delivery resumes. \\
+\addlinespace
+Completion interrupt loss &
+\texttt{event=CQE\_ACCEPT}\newline
+\texttt{event=IRQ\_SUPPRESS} &
+\texttt{I/O 596 QID 1 timeout, completion polled} &
+Completion consumed; no reset observed; subsequent reads and interrupts succeed. \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
+\par\smallskip
+\begin{minipage}{\textwidth}
+\footnotesize
+Intervention entries show selected host-log fields; driver excerpts omit
+timestamps and common prefixes. For interrupt loss, IRQ increments are 10, 9,
+and 10 for the precheck, injection, and follow-up batches, respectively; each
+batch contains ten 4-KiB reads.
+\end{minipage}
 \end{table*}
 
-\begin{table}[t]
-\centering
-\caption{Placeholder for the FPGA capacity synthesis sweep.}
-\label{tab:resource-plan}
-\small
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-Endpoint slots & LUT & FF & BRAM/URAM & Fmax \\
-\midrule
-1  & pending & pending & pending & pending \\
-2  & pending & pending & pending & pending \\
-4  & pending & pending & pending & pending \\
-8  & pending & pending & pending & pending \\
-13 & pending & pending & pending & pending \\
-\bottomrule
-\end{tabular}
-\end{table}
+\subsection{Peripheral Configurability and Functional Validation}
+\label{sec:functional-validation}
+
+\noindent\textit{Planned evaluation; experimental evidence pending.}
+% Planned scope: validate configurable DUT-visible peripheral types and backend
+% locations using NVMe, NIC, Vortex, and FSA, subject to collected evidence.
+% Retain enumeration, driver-binding, and a minimal functional-test record for
+% each tested configuration. Distinguish native from device-specific drivers.
+% Summarize device type, backend location, driver, and functional test in a
+% compact table. Record bitstream and DUT software identities when claiming
+% configuration changes without rebuilding hardware or changing DUT software.
+% Claim concurrent composition only for configurations tested together.
+% Do not infer scalability or functional success from enumeration alone.
+
+\subsection{Fault Injection}
+\label{sec:fault-injection}
+
+\begin{sloppypar}
+Beyond peripheral connectivity, \sys provides software-controlled fault
+injection by selectively intervening in interactions between the DUT and
+physical peripherals. This enables controlled fault scenarios without relying
+on naturally occurring hardware failures, while retaining the physical backend
+and the unmodified DUT driver. We demonstrate this capability with three NVMe
+cases targeting controller initialization, command submission, and completion
+notification. Table~\ref{tab:fault-injection} links each intervention to the
+observed native-driver behavior and subsequent recovery checks.
+\end{sloppypar}
+
+
+
+The cases exercise distinct error-handling paths. Initialization aborts when
+the ready state is withheld despite the physical controller being ready.
+Dropping the target SQ doorbell triggers timeout handling followed by
+controller reset. In contrast, suppressing only the completion notification
+leaves the successful CQE available for the driver to discover by polling on
+timeout, with no controller reset observed.
+
+These cases demonstrate how software mediation extends FPGA-based pre-silicon
+validation beyond normal peripheral operation. By controlling interactions
+with a physical backend, \sys allows the DUT's native driver to encounter
+selected fault conditions and exercise error-handling paths that successful
+I/O alone does not test. This makes abnormal device interactions an explicit,
+software-controlled part of prototype validation, without requiring changes
+to DUT software or waiting for naturally occurring hardware faults.
+
+% Keep evaluation evidence ahead of the following section.
+\FloatBarrier
