@@ -1,104 +1,108 @@
 \section{Evaluation}
 \label{sec:evaluation}
 
-We evaluate four questions. First, can one FPGA interface expose independently
-configured logical endpoints while the DUT software remains unchanged? Second,
-does semantic mediation preserve enough of the native device contract for Linux
-drivers to perform I/O? Third, what latency does control mediation introduce?
-Fourth, can payload transfer use a path whose performance is close to direct
-access to the same backend? The experiments distinguish functional
-compatibility from timing fidelity; successful I/O does not imply that mediated
-and direct attachment have identical timing.
+We evaluate \sys in terms of peripheral configurability, performance
+implications, and controllability of device interactions. We measure
+control-path latency and data-path performance across on-board, host-local,
+and host-remote configurations, and assess functional support across peripheral
+types and backend locations. Finally, we use software-mediated fault injection
+to evaluate the error-handling behavior of unmodified DUT drivers.
 
 \subsection{Experimental Setup}
 
-The prototype instantiates the generic interface on a XiangShan RISC-V FPGA
-system connected to an x86 host. Before DUT enumeration, a QEMU coordinator
-selects the active logical endpoints and binds them to physical backends. The
-FPGA provisions a bounded configuration and routing capacity, while endpoint
-semantics reside in host software. The evaluated NIC exposes one queue pair and
-legacy INTx.
-
-Table~\ref{tab:platform} records the platform and measurement boundaries. Proxy
-Forwarding measures a DUT-visible BAR transaction through the FPGA event path
-and host coordinator. Direct Control measures a requester-visible MMIO write
-without the semantic proxy. The separate NVMe submission measurement includes
-queue inspection and address translation before the physical doorbell. These
-latencies therefore describe different operations and are reported separately.
+We evaluate \sys on the NEXST FPGA prototyping platform using a XiangShan
+RISC-V processor running at 50\,MHz. Table~\ref{tab:platform} summarizes the
+hardware and software configuration. The on-board configuration connects the
+peripheral directly to the FPGA platform; host-local and host-remote place it
+on the FPGA-connected host and a separate RDMA-accessible host, respectively.
+The on-board baseline uses a bitstream and device tree configured for direct
+PCIe access, whereas both host-based configurations access the peripherals
+through \sys. Measurement procedures and workload parameters are described
+in the respective subsections.
+% TODO: Add the verified NEXST reference.
 
 \begin{table}[t]
 \centering
-\caption{Prototype configuration and evaluation boundary.}
+\caption{Experimental platform and software configuration.}
 \label{tab:platform}
 \small
-\begin{tabular}{@{}p{0.25\columnwidth}p{0.67\columnwidth}@{}}
+\begin{tabular}{@{}p{0.28\columnwidth}p{0.64\columnwidth}@{}}
 \toprule
 Item & Configuration \\
 \midrule
-DUT & XiangShan RISC-V FPGA prototype at 50\,MHz, running Linux and standard
-kernel drivers \\
-FPGA platform & NM37/Nanhu-G flow on an AMD/Xilinx VU37P device \\
-Host & x86 system running the QEMU coordinator and Xilinx XDMA driver \\
-Backends & NVMe (logical ID \texttt{8086:4802}) and Intel 82580 Ethernet
-(\texttt{8086:150e}, \texttt{igb}) \\
-Virtualized boundary & ECAM, BAR control, DMA addresses, completion state, and
-aggregate legacy INTx \\
-Excluded boundary & PCIe PHY/link behavior, MSI/MSI-X, AER, hotplug, and
-multi-queue scaling \\
+Prototyping platform & NEXST; NM37 with an AMD/Xilinx VU37P FPGA \\
+DUT & XiangShan RISC-V processor at 50\,MHz \\
+DUT software & Linux 5.16.0; native \texttt{nvme} and \texttt{igb} drivers \\
+Local host & $2\times$ Intel Xeon Gold 6248R, 3.0\,GHz; Ubuntu 22.04.5 LTS \\
+Remote host & $2\times$ Intel Xeon Gold 6130H, 2.1\,GHz; Ubuntu 22.04.4 LTS \\
+Host software & Modified QEMU coordinator; XDMA driver; remote backend agent \\
+Performance backends & Intel P4510 1\,TB NVMe SSD; Intel 82580 Gigabit NIC \\
+Remote interconnect & iWARP over 1\,GbE; Intel X722 adapters \\
+FPGA--host link & PCIe Gen3 $\times8$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Configuration and Native-Driver Compatibility}
+\noindent\textbf{FPGA resource cost.}
+SCOPE replaces the FPGA-resident PCIe Root Port with a lightweight front end.
+Post-route reports show that the complete SCOPE configuration uses 8,068 fewer
+LUTs (0.85\%), 14,749 fewer flip-flops (2.90\%), and 142 fewer 36-Kb BRAM tiles
+(11.72\%) than the original Root Port configuration. Percentages are relative
+to the total resource usage of the original configuration.
 
-The functional experiment holds the FPGA bitstream and DUT software constant
-and changes the enabled endpoint and backend binding in the host configuration.
-Linux enumerates the resulting hierarchy and binds its standard \texttt{nvme}
-or \texttt{igb} driver. The NVMe path completes queue setup and storage reads;
-the NIC path completes link setup, address configuration, ping, and bidirectional
-packet transfer. These tests exercise configuration, runtime control, translated
-DMA, completion, and interrupt delivery. They demonstrate two device types in
-separate configurations. Simultaneous NVMe and NIC operation has not been
-measured and is not inferred from the independent runs.
+\subsection{Control-Path Overhead}
 
-\subsection{Control-Path Cost}
+We characterize the cost of software-mediated NVMe access using a BAR-write
+microbenchmark and an SQ doorbell write during command submission. For both
+measurements, timestamps are taken on the DUT before the register write and
+after the subsequent I/O fence. Elapsed cycles are measured using the RISC-V
+cycle counter and converted to time using the DUT's 50\,MHz clock. The BAR
+probe targets the read-only NVMe Version (VS) register at offset \texttt{0x08}.
+The doorbell measurement is performed during the submission of a real 4-KiB
+NVMe read; the subsequent wait for command completion is excluded from the
+timed interval.
 
-Table~\ref{tab:control} separates measurements by requester and timing boundary.
-Proxy Forwarding incurs tens of microseconds because it crosses the FPGA event
-channel and invokes the host coordinator. The NVMe semantic-submission value is
-larger than its BAR-write value because the adapter must observe the queue entry,
-translate DMA references, and prepare the physical submission. Direct Control
-provides a nanosecond-scale reference for an MMIO path that does not perform
-those semantic operations; it is not an ablation in which an arbitrary mediated
-submission can be safely bypassed.
-
-\begin{table*}[t]
+\begin{table}[t]
 \centering
-\caption{Control measurements and their timing boundaries.}
+\caption{DUT-observed control-path latency (\si{\micro\second}).}
 \label{tab:control}
 \small
-\begin{tabular}{@{}p{0.23\textwidth}p{0.31\textwidth}p{0.17\textwidth}p{0.20\textwidth}@{}}
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\columnwidth}{@{}Xrrr@{}}
 \toprule
-Path & Timed operation & Value & Interpretation \\
+Operation & On-board & Host-local & Host-remote \\
 \midrule
-Proxy Forwarding & NVMe BAR-write round trip observed by DUT &
-29.92\,\si{\micro\second} & FPGA event, host handling, and FPGA response \\
-Proxy Forwarding & 82580 BAR-write round trip observed by DUT &
-28.06\,\si{\micro\second} & Same boundary as the NVMe proxy value \\
-NVMe semantic path & BAR write / effective doorbell submission &
-30.15 / 61.41\,\si{\micro\second} & Separate wall-clock experiment; submission
-includes queue and address processing \\
-Direct Control (ARM A53) & FPGA-side / host-side NVMe MMIO write &
-1136.00 / 1295.11\,\si{\nano\second} & Host-side path is 14.0\% higher \\
-Direct Control (ARM A53) & Host-side NIC MMIO write &
-1143.38\,\si{\nano\second} & Requester-visible direct-path reference \\
-Direct Control (RocketChip) & FPGA-side / host-side NVMe MMIO write &
-1138.57 / 1616.35\,\si{\nano\second} & Separate DUT implementation \\
-Direct Control (RocketChip) & Host-side NIC MMIO write &
-1432.90\,\si{\nano\second} & Requester-visible direct-path reference \\
+BAR write + fence & 2.448 & 16.624 & 468.370 \\
+SQ doorbell write + fence & 4.692 & 59.379 & 1113.010 \\
 \bottomrule
-\end{tabular}
-\end{table*}
+\end{tabularx}
+\par\smallskip
+\begin{minipage}{\columnwidth}
+\footnotesize
+BAR results are averaged over ten runs of 1,000 accesses,
+while doorbell results are averaged over three runs of 100 commands each.
+All valid samples are retained, and a fixed six-cycle instrumentation overhead
+is subtracted from both measurements.
+\end{minipage}
+\end{table}
+
+Table~\ref{tab:control} shows that BAR write latency increases from
+2.448\,\si{\micro\second} for on-board access to 16.624\,\si{\micro\second}
+for host-local access and 468.370\,\si{\micro\second} for host-remote access.
+SQ doorbell submission takes 4.692\,\si{\micro\second},
+59.379\,\si{\micro\second}, and 1113.010\,\si{\micro\second} for the three
+configurations, respectively. The host-based paths introduce FPGA event
+forwarding and software processing, with remote access additionally traversing
+the RDMA connection. SQ doorbell submission also requires queue handling and
+backend processing.
+
+These control-path costs are the price of enabling flexible access to
+host-local and remote peripherals. For the functional and driver-validation
+tasks targeted by \sys, the key question is whether this flexibility preserves
+device functionality and native driver behavior while enabling controlled
+fault injection and observation of driver responses. The functional and
+fault-injection experiments evaluate this capability, while the next subsection
+examines sustained I/O performance across the three configurations.
 
 \subsection{NVMe Data Path}
 
@@ -138,6 +142,18 @@ directions, respectively. UDP reaches 4.90 and
 translation, payload transfer, completion, and interrupt handling. Without a
 matched direct/on-board NIC baseline and the missing workload parameters, they
 do not support a line-rate or relative-performance claim.
+
+\subsection{Configuration and Native-Driver Compatibility}
+
+The functional experiment holds the FPGA bitstream and DUT software constant
+and changes the enabled endpoint and backend binding in the host configuration.
+Linux enumerates the resulting hierarchy and binds its standard \texttt{nvme}
+or \texttt{igb} driver. The NVMe path completes queue setup and storage reads;
+the NIC path completes link setup, address configuration, ping, and bidirectional
+packet transfer. These tests exercise configuration, runtime control, translated
+DMA, completion, and interrupt delivery. They demonstrate two device types in
+separate configurations. Simultaneous NVMe and NIC operation has not been
+measured and is not inferred from the independent runs.
 
 \subsection{Completion and Interrupt Ordering}
 
