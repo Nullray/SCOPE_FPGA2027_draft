@@ -11,8 +11,14 @@
 \usepackage{xspace}
 \usepackage{enumitem}
 \usepackage{tabularx}
+\usepackage{indentfirst}
 
-\newcommand{\sys}{\textsc{SCOPE}\xspace}
+% Indent the first body paragraph after every sectioning command as well as
+% subsequent paragraphs. This is a deliberate manuscript-wide style choice.
+\setlength{\parindent}{1em}
+
+\newcommand{\sys}{\textsc{SCOPE}~v2\xspace}
+\newcommand{\sysprevious}{\textsc{SCOPE}\xspace}
 \newcommand{\tax}{\emph{peripheral integration tax}\xspace}
 
 \acmConference[FPGA '27]{The 35th ACM/SIGDA International Symposium on Field-Programmable Gate Arrays}{March 14--16, 2027}{Monterey, CA, USA}
@@ -21,38 +27,39 @@
 \settopmatter{printacmref=false}
 
 \hypersetup{
-  pdftitle={SCOPE: A Software-Defined Peripheral Subsystem for FPGA Prototyping},
+  pdftitle={SCOPE v2: A Software-Defined Peripheral Subsystem for Processor Prototyping},
   pdfauthor={Anonymous Authors}
 }
 
 \begin{document}
 
-\title{SCOPE: A Software-Defined Peripheral Subsystem for FPGA Prototyping}
+\title{SCOPE v2: A Software-Defined Peripheral Subsystem for Processor Prototyping}
 \author{Anonymous Author(s)}
 
 \begin{abstract}
-FPGA prototypes must run production operating systems and drivers against real
-peripherals, yet the devices available to a design under test (DUT) are usually
-fixed by board connectors, host placement, and device-specific FPGA logic.
-Remote access alone is insufficient because an unmodified DUT must discover a
-legal PCIe hierarchy and observe coherent register, queue, DMA, completion, and
-interrupt behavior. We present \sys, a software-defined peripheral subsystem
-that makes the DUT-visible composition and backend binding software choices.
-\sys separates device presentation from backend realization and separates
-control semantics from payload movement. A generic FPGA front-end provides
-configuration shadowing, BAR routing, event transport, DMA windows, and
-interrupt injection; host software owns the logical device state, translates
-device-specific submissions and addresses, and binds each endpoint to a
-physical backend. Three ordering invariants reconnect the separated functions:
-configuration with routing, submission with translated DMA state, and returned
-data with completion. A pre-silicon prototype runs standard Linux NVMe and Intel
-82580 drivers against physical backends. DUT-observed proxy BAR-write round
-trips are $29.92\,\si{\micro\second}$ for NVMe and
-$28.06\,\si{\micro\second}$ for the NIC. By keeping payload movement off this
-control path, 128-KiB sequential-read bandwidth reaches
-$2596.3\,\si{\mega\byte\per\second}$, or 99.1\% of the host-attached result.
-These results demonstrate configurable functional access while exposing the
-timing cost and fidelity boundary introduced by semantic mediation.
+FPGA-based processor prototypes require real peripherals, but physical
+attachment and device-specific logic constrain the device composition visible
+to a design under test (DUT). Remote access is insufficient unless discovery,
+control, direct memory access (DMA), and completion preserve the native-driver
+contract.
+
+We present \sys, a software-defined peripheral subsystem that makes supported
+device composition and physical-device assignment software choices before DUT
+enumeration, without changing the native driver. Two
+decouplings provide the architectural means: logical presentation from physical
+attachment, and control semantics from payload movement. A generic FPGA
+front-end presents the PCIe device interface; an authoritative host software
+back-end coordinates logical state with physical execution. Per-endpoint commit
+points join configuration and routes, translated submissions and DMA, and data
+visibility and completion publication. Host-local payload movement can bypass
+software copying while device-specific control remains mediated.
+
+A processor FPGA prototype runs standard Linux storage and network drivers in
+separate single-endpoint configurations. Inherited control-path measurements
+provide context, not isolated presentation-layer costs. Matched end-to-end
+performance, concurrent composition, and FPGA resource scaling remain
+unestablished. The design enables configurable functional access with an
+explicit boundary on timing fidelity.
 \end{abstract}
 
 \ccsdesc[500]{Hardware~Reconfigurable logic and FPGAs}
@@ -65,10 +72,10 @@ timing cost and fidelity boundary introduced by semantic mediation.
 
 \input{sections/01-introduction}
 \input{sections/02-background-motivation}
+\input{sections/07-related-work}
 \input{sections/03-overview}
 \input{sections/04-design}
 \input{sections/06-evaluation}
-\input{sections/07-related-work}
 \input{sections/08-discussion}
 \input{sections/09-conclusion}
 

@@ -1,0 +1,82 @@
+[
+  {
+    "figure": "fig01_access_tradeoff",
+    "source": "access_tradeoff_scope_v2.png",
+    "width": 1225,
+    "height": 1284,
+    "nativeCells": 39,
+    "referenceSha256": "7906847dcca0b1ee029ac48415695dbcf9365893387353406e1bbcb33f8a461b"
+  },
+  {
+    "figure": "fig02_driver_contract",
+    "source": "driver_contract_ai_single_v2.png",
+    "width": 1024,
+    "height": 1536,
+    "nativeCells": 20,
+    "referenceSha256": "63183e13e379eeef59f30c3b502cc2013c873d91eeb4cd0c2aea5d6166b07b5f"
+  },
+  {
+    "figure": "fig03_system_architecture",
+    "source": "system_architecture_ai_v2.png",
+    "width": 1816,
+    "height": 866,
+    "nativeCells": 78,
+    "referenceSha256": "4fdf5fc8eaefdd66ff7e5dda6173c20495ee7f345d10e46ff865d0fe4c5a3545"
+  },
+  {
+    "figure": "fig04_sdn_planes",
+    "source": "sdn_planes_scope_v2.png",
+    "width": 1254,
+    "height": 1254,
+    "nativeCells": 17,
+    "referenceSha256": "df22169e3c9ab4b72bfea58da6e29f2f295f433d16baf5cd51b2eaee00028214"
+  },
+  {
+    "figure": "fig05_coherence_contracts",
+    "source": "coherence_contracts_ai_single_v2.png",
+    "width": 1230,
+    "height": 1278,
+    "nativeCells": 24,
+    "referenceSha256": "2c25afc6a823e3e3a36b39e3f146f5dffc7087bc21605d272cabf4e3d6ccc27c"
+  },
+  {
+    "figure": "fig06_topology_reconfiguration",
+    "source": "topology_reconfiguration_ai_single_v2.png",
+    "width": 1254,
+    "height": 1254,
+    "nativeCells": 19,
+    "referenceSha256": "6cd9458367440b08e6ca074fe288f95a285c4d6b476fa2c77105e23179302038"
+  },
+  {
+    "figure": "fig07_semantic_dma",
+    "source": "semantic_dma_ai_single_v2.png",
+    "width": 1024,
+    "height": 1536,
+    "nativeCells": 21,
+    "referenceSha256": "b1a316a60981bcdd791daee6ed203990ca39b14be62e1e45428bbc9803b34b75"
+  },
+  {
+    "figure": "fig08_measurement_boundaries",
+    "source": "measurement_boundaries_ai_single_v2.png",
+    "width": 1254,
+    "height": 1254,
+    "nativeCells": 22,
+    "referenceSha256": "e161e786becbe161be1c336262f9bcb1bd7dacc09baa7a8100887d2bd1328cad"
+  },
+  {
+    "figure": "fig05_commit_points_v3",
+    "source": "coherence_commit_points_ai_v3.png",
+    "width": 1254,
+    "height": 1254,
+    "nativeCells": 28,
+    "referenceSha256": "b3a9116efb318bcfa58196d371ed1ae51e0c1e4f047a79f1880ca22e41946eb6"
+  },
+  {
+    "figure": "fig03_system_architecture_aligned_v3",
+    "source": "system_architecture_aligned_ai_v3.png",
+    "width": 1816,
+    "height": 866,
+    "nativeCells": 78,
+    "referenceSha256": "02522656fe204aed221c9177ce3d290908d361b67934fddf44b44e54c1ee52aa"
+  }
+]

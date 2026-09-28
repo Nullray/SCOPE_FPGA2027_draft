@@ -4,19 +4,41 @@
 FPGA prototypes allow hardware and system software to evolve before silicon is
 available. Their value increasingly depends on running a complete software
 stack, including the operating system, production drivers, and realistic I/O
-workloads. Such validation requires real NVMe SSDs, NICs, and accelerators:
-software device models are configurable and observable, but their usefulness is
+workloads. FPGA-accelerated platforms use timing-faithful component models and
+modular simulation to make full-system experiments tractable
+\cite{karandikar2018firesim,biancolin2019fased,li2022simbricks}. Real NVMe SSDs
+and NICs complement model-based validation: software device models are configurable and observable, but their usefulness is
 bounded by the fidelity of the modeled controller, firmware, timing, and DMA
 behavior.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/paper/access_tradeoff_scope_v2.png}
+    \caption{Where three peripheral-access approaches define the DUT-visible
+    device, handle control, and execute I/O. \sys combines a software-defined
+    view and host-mediated control with a compatible physical device.
+    This is a qualitative responsibility comparison, not a ranking of timing
+    or functional fidelity.}
+    \label{fig:design-space}
+    \Description{Three stacked comparison bands align direct attachment,
+    device modeling, and SCOPE v2 by DUT-visible device, control semantics, and
+    I/O execution. Direct attachment has a view fixed by attachment and physical
+    execution. Device modeling has a software-defined view and modeled
+    execution. SCOPE v2 has a software-defined view, host mediation, and physical
+    execution through a compatible binding.}
+\end{figure}
 
 Attaching a real device retains its controller and firmware as participants in
 validation, but usually makes the
 validation environment rigid. The DUT can use only devices reachable through
-the prototype board and its host topology. Adding device types often requires
-device-specific RTL for configuration, register access, DMA, and interrupts.
+the prototype board and its host topology. In platforms with hardware peripheral
+proxies, adding device types can require device-specific RTL for configuration,
+register access, DMA, and interrupts.
 Changing the device composition may require rewiring, additional PCIe hardware,
 or a new FPGA build. These costs consume both scarce FPGA resources and
-engineering time. We call their incremental cost the \tax.
+engineering time, a concern also identified by FPGA operating-system work that
+factors reusable I/O services out of application logic~\cite{zhang2017feniks}.
+We call their incremental cost the \tax.
 
 Moving a device to another host does not by itself remove this coupling. A DUT
 does not consume an abstract remote-I/O service. Its unmodified Linux stack
@@ -28,63 +50,71 @@ contract may enumerate a device but cannot make it usable.
 
 This paper asks: \emph{Can the peripheral subsystem visible to an FPGA-hosted
 DUT be defined in software, without moving complete device implementations into
-the FPGA and without changing the DUT driver?} We answer with \sys, a
-software-defined peripheral subsystem for FPGA prototyping. ``Software-defined''
-has a precise meaning in \sys: within a hardware-supported capacity, software
-selects which logical endpoints the DUT sees, binds them to local or remote
-physical backends, and chooses how their control semantics and DMA paths are
-realized. The bitstream provides stable mechanisms rather than a fixed device
-composition.
+the FPGA and without changing the DUT driver?} We answer with \sys. Its goal is
+\emph{software-defined peripheral access}: before DUT enumeration, host
+configuration selects which provisioned logical endpoints are active, the
+supported contracts they expose, and their bindings to compatible physical devices,
+without requiring a new FPGA bitstream or DUT driver. This goal does not imply
+arbitrary device protocols: the FPGA supplies generic interface mechanisms,
+while the host software back-end must implement the advertised control semantics
+and connect each endpoint to a suitable physical device.
 
-The design balances two objectives of peripheral access. Virtualization gives
-the user control over the logical device view and backend binding. Passthrough
-retains execution by a physical controller, including the firmware and I/O
-effects exercised by the workload. These objectives meet at a semantic
-boundary: a configurable endpoint still has to issue commands that its backend
-can execute, and an adapter can alter the timing and behavior observed by the
-driver. \sys uses selective mediation to preserve this boundary, with
-functional fidelity and timing fidelity treated as distinct validation goals.
+Figure~\ref{fig:design-space} separates the device visible to the DUT, the
+owner of control semantics, and the entity executing I/O. Virtualization gives
+the user control over presentation and physical-device assignment.
+Compatible physical execution retains an independent controller and firmware
+for the operations exercised by the workload. \sys combines these properties
+through selective control mediation. The exposed contract must remain
+supported by the assigned device, and mediation can alter timing and
+concurrency. Configurability, functional compatibility, and timing fidelity
+are therefore distinct properties of the resulting validation environment.
 
-\sys obtains this ability through \emph{dual decoupling}. First,
-\emph{device-presentation--backend-implementation decoupling} separates the
-PCIe identity and driver-visible behavior presented to the DUT from the
-physical device's location and backend realization. Second,
-\emph{control-semantics--data-path decoupling} allows software to mediate
-configuration and runtime control while bulk data uses a separately optimized
-DMA path. These separations create flexibility, but they are safe only if the
-resulting distributed state still behaves like one device. \sys therefore
-enforces three coherence relations: configuration writes become visible
-together with their BAR routes; a submission reaches a backend only after its
-queue entry and translated DMA addresses are visible; and a completion becomes
-visible only after its data effects.
+The architectural means is \emph{dual decoupling}. Logical presentation--physical
+device decoupling makes the supported view and compatible binding configurable.
+Control-semantics--data-path decoupling permits semantic mediation without
+forcing payload bytes through software. A generic FPGA front-end presents the
+selected interface, and a host software back-end owns logical state and
+device-specific mediation. Their distributed state must still behave as one
+device to the driver. \sys coordinates it at three per-endpoint commit points:
+configuration-write retirement after image and route installation, physical
+submission after translated-state visibility, and completion publication
+after data visibility.
 
-The FPGA front-end implements standard ECAM access, a configuration shadow,
-BAR routing, a control-event transport, DMA windows, and interrupt injection.
-The host software back-end owns the logical topology and device state, dispatches
-accesses by logical BDF, translates NVMe and NIC queue semantics, and connects
-each endpoint to a physical device. This partition keeps latency-critical,
-interface-facing mechanisms in hardware while placing extensible device
-semantics in software.
+\sysprevious~\cite{scope2026fpt} already provides cross-domain peripheral
+borrowing, control/data separation, and semantic adapters. \sys extends that
+substrate with a software-selected logical PCIe view consumed by native kernel
+drivers. This interface adds configuration and routing authority to the
+borrowed execution path, requiring their commit to remain consistent with
+submission and completion. Native protocols already impose the underlying
+ordering requirements. The contribution is the coordination of that contract
+across the front-end, software back-end, and physical device, rather than
+control/data separation or address translation alone.
 
 This paper makes three contributions:
 \begin{itemize}[leftmargin=*]
-    \item It defines a software-defined peripheral subsystem that turns the
-    DUT-visible device composition and endpoint-to-backend binding into software
-    configuration rather than a consequence of physical attachment.
-    \item It presents a hardware/software architecture based on device-
-    presentation--backend-implementation decoupling and control-semantics--
-    data-path decoupling, with explicit coherence rules spanning enumeration,
-    runtime control, DMA address translation, completion, and interrupts.
-    \item It demonstrates the design on a RISC-V SoC FPGA prototype with real
-    NVMe and Intel Ethernet backends, and evaluates native-driver compatibility,
-    control overhead, data-path performance, and completion/interrupt ordering.
+    \item It defines a native-driver-facing device abstraction in which
+    supported logical composition and compatible physical-device binding are
+    host software choices within a fixed FPGA interface capacity.
+    \item It presents a coordination protocol that joins authoritative logical
+    state and FPGA-visible configuration and routes to the inherited execution
+    path. Per-endpoint commit points identify when a configuration access may
+    retire, physical work may be submitted, and completion may be published,
+    with explicit assumptions on memory visibility.
+    \item It demonstrates the design on a processor FPGA prototype with real
+    NVMe and Intel Ethernet devices, and evaluates native-driver operation in
+    separate endpoint configurations while distinguishing it from inherited
+    control-path and interrupt measurements.
+    Matched data-path and capacity-scaling experiments are specified as pending.
 \end{itemize}
 
-The current implementation targets pre-silicon FPGA prototyping. The same
+The current implementation targets pre-silicon processor prototyping. The same
 logical abstraction may be useful in post-silicon validation, but we treat that
 extension as future work rather than a demonstrated contribution.
+Section~\ref{sec:motivation} states the requirements, and
+Section~\ref{sec:related} positions the work relative to FPGA virtualization,
+simulation, and resource disaggregation.
 Section~\ref{sec:overview} develops the architectural separation,
-Section~\ref{sec:design} derives the mechanisms that preserve device semantics,
+Section~\ref{sec:design} explains coordination at the three commit points,
 and Section~\ref{sec:evaluation} evaluates their compatibility and cost.
 Section~\ref{sec:discussion} examines the resulting configurability--fidelity
 tradeoff.

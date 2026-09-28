@@ -1,58 +1,64 @@
 \section{Evaluation}
 \label{sec:evaluation}
 
-We evaluate four questions. First, can one FPGA interface expose independently
-configured logical endpoints while the DUT software remains unchanged? Second,
-does semantic mediation preserve enough of the native device contract for Linux
-drivers to perform I/O? Third, what latency does control mediation introduce?
-Fourth, can payload transfer use a path whose performance is close to direct
-access to the same backend? The experiments distinguish functional
-compatibility from timing fidelity; successful I/O does not imply that mediated
-and direct attachment have identical timing.
+The evaluation asks whether supported device views can change without changing
+the FPGA interface or DUT software, whether native drivers can use the mediated
+contract, and what control-path cost the prototype incurs. It then separates
+observed results from measurements still needed to assess payload performance,
+concurrent composition, and FPGA capacity scaling. Functional compatibility
+does not imply direct-attachment timing fidelity.
+
+Several numerical records below also appear in
+\sysprevious~\cite{scope2026fpt}: the proxy BAR-write round trips, direct MMIO
+references, NVMe P2P reads, and virtual interrupt injection. They characterize
+the preceding routing substrate and are retained as context, not independent
+measurements of \sys's configurable device presentation. The native-driver
+functional tests and the planned matched comparisons address that additional
+boundary. Raw-log reconciliation is still required before attributing costs
+to individual mechanisms.
 
 \subsection{Experimental Setup}
 
-The prototype instantiates the generic interface on a XiangShan RISC-V FPGA
-system connected to an x86 host. Before DUT enumeration, a QEMU coordinator
-selects the active logical endpoints and binds them to physical backends. The
-FPGA provisions a bounded configuration and routing capacity, while endpoint
-semantics reside in host software. The evaluated NIC exposes one queue pair and
-legacy INTx.
+The prototype connects a XiangShan RISC-V FPGA system to an x86 host. A
+QEMU-based host software back-end selects the logical device view and assigns
+compatible physical devices before DUT enumeration. The same FPGA interface
+is used in the two evaluated single-endpoint configurations. The tested NIC
+configuration uses one queue pair and legacy INTx; Table~\ref{tab:platform}
+records the platform and scope needed to interpret the measurements.
 
-Table~\ref{tab:platform} records the platform and measurement boundaries. Proxy
-Forwarding measures a DUT-visible BAR transaction through the FPGA event path
-and host coordinator. Direct Control measures a requester-visible MMIO write
-without the semantic proxy. The separate NVMe submission measurement includes
-queue inspection and address translation before the physical doorbell. These
-latencies therefore describe different operations and are reported separately.
+The proxy result times a BAR access observed by the DUT through the FPGA and
+host software back-end. Direct Control times an MMIO write without semantic
+mediation. A separate NVMe result includes submission processing and address
+translation before physical execution. These are distinct operations and
+cannot be treated as an overhead decomposition. The Direct Control tests also
+use ARM A53 and RocketChip requesters rather than the XiangShan proxy setup;
+they provide context, not matched baselines. Raw run identifiers, commands,
+repetition counts, and dispersion remain to be supplied, so the numerical
+entries below are retained as draft measurements.
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
 \caption{Prototype configuration and evaluation boundary.}
 \label{tab:platform}
 \small
-\begin{tabular}{@{}p{0.25\columnwidth}p{0.67\columnwidth}@{}}
+\begin{tabularx}{\textwidth}{@{}p{0.23\textwidth}X@{}}
 \toprule
-Item & Configuration \\
+Boundary & Evaluated configuration \\
 \midrule
-DUT & XiangShan RISC-V FPGA prototype at 50\,MHz, running Linux and standard
-kernel drivers \\
-FPGA platform & NM37/Nanhu-G flow on an AMD/Xilinx VU37P device \\
-Host & x86 system running the QEMU coordinator and Xilinx XDMA driver \\
-Backends & NVMe (logical ID \texttt{8086:4802}) and Intel 82580 Ethernet
-(\texttt{8086:150e}, \texttt{igb}) \\
-Virtualized boundary & ECAM, BAR control, DMA addresses, completion state, and
-aggregate legacy INTx \\
-Excluded boundary & PCIe PHY/link behavior, MSI/MSI-X, AER, hotplug, and
-multi-queue scaling \\
+DUT & XiangShan RISC-V FPGA prototype at 50\,MHz; Linux with standard drivers \\
+Host & x86 host running the QEMU-based software back-end; VU37P-based FPGA interface \\
+Endpoint configurations & NVMe and Intel 82580 Ethernet, each assigned to a compatible physical device in a separate run \\
+Mediated interface & Configuration and BAR control, DMA addresses, completion state, and legacy INTx \\
+Outside evaluated scope & PCIe link behavior, MSI/MSI-X, AER, hotplug, and multi-queue operation \\
 \bottomrule
-\end{tabular}
-\end{table}
+\end{tabularx}
+\end{table*}
 
 \subsection{Configuration and Native-Driver Compatibility}
 
 The functional experiment holds the FPGA bitstream and DUT software constant
-and changes the enabled endpoint and backend binding in the host configuration.
+and changes the supported logical endpoint and its physical-device assignment
+in host configuration.
 Linux enumerates the resulting hierarchy and binds its standard \texttt{nvme}
 or \texttt{igb} driver. The NVMe path completes queue setup and storage reads;
 the NIC path completes link setup, address configuration, ping, and bidirectional
@@ -64,17 +70,40 @@ measured and is not inferred from the independent runs.
 \subsection{Control-Path Cost}
 
 Table~\ref{tab:control} separates measurements by requester and timing boundary.
-Proxy Forwarding incurs tens of microseconds because it crosses the FPGA event
-channel and invokes the host coordinator. The NVMe semantic-submission value is
-larger than its BAR-write value because the adapter must observe the queue entry,
-translate DMA references, and prepare the physical submission. Direct Control
+Proxy Forwarding records tens of microseconds on a path that crosses the FPGA
+event channel and host software back-end. The NVMe semantic-submission value exceeds
+the BAR-write value and includes queue inspection and address translation.
+Without component timestamps or an ablation, these aggregates do not isolate
+the cost of those operations. Direct Control
 provides a nanosecond-scale reference for an MMIO path that does not perform
 those semantic operations; it is not an ablation in which an arbitrary mediated
 submission can be safely bypassed.
 
+Figure~\ref{fig:measurement-boundaries} makes the three timed intervals
+explicit. The direct-control path uses different requesters and omits the
+semantic proxy, so its value cannot be subtracted from a proxy measurement to
+isolate mediation cost.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/paper/measurement_boundaries_ai_single_v2.png}
+    \caption{Timing boundaries for the measurements in
+    Table~\ref{tab:control}. The line between endpoint ticks in each lane
+    marks its timed interval, not a common start or end event across lanes. Proxy, semantic
+    submission, and direct control use different requesters or processing
+    paths and do not form a matched overhead decomposition. Numerical values
+    remain in the table pending raw-log provenance checks.}
+    \label{fig:measurement-boundaries}
+    \Description{Three lanes identify the start, intermediate operations, and
+    end of proxy BAR round trip, storage semantic submission, and a direct MMIO
+    reference measurement. The lanes have distinct timing boundaries.}
+\end{figure}
+
 \begin{table*}[t]
 \centering
-\caption{Control measurements and their timing boundaries.}
+\caption{Control measurements and timing boundaries. Proxy Forwarding and
+Direct Control values are also reported in \sysprevious~\cite{scope2026fpt};
+the separate semantic-submission record still requires provenance checks.}
 \label{tab:control}
 \small
 \begin{tabular}{@{}p{0.23\textwidth}p{0.31\textwidth}p{0.17\textwidth}p{0.20\textwidth}@{}}
@@ -102,15 +131,18 @@ Direct Control (RocketChip) & Host-side NIC MMIO write &
 
 \subsection{NVMe Data Path}
 
-Table~\ref{tab:nvme} compares the on-board/P2P path with the host-attached path
-under the recorded DUT read workloads. Sequential-read bandwidth retains
-99.1\% of the host-attached result, and random-read throughput retains 98.5\%.
-This contrast with the control-path latency supports the architectural choice
-to keep payload movement off the software event channel.
+Table~\ref{tab:nvme} retains the draft's host-attached and on-board/P2P
+measurements pending provenance reconciliation. Their arithmetic ratios are
+99.1\% and 98.5\%, respectively. The available manuscript and slide records
+disagree on the underlying throughput and IOPS values; the requester, path,
+queue depth, and units must be matched to raw logs before interpreting these
+ratios as end-to-end \sys performance. They are excluded from the abstract's
+performance claims.
 
 \begin{table}[t]
 \centering
-\caption{NVMe read performance observed by the DUT.}
+\caption{NVMe read records also reported in \sysprevious~\cite{scope2026fpt};
+their use as end-to-end \sys results remains pending provenance checks.}
 \label{tab:nvme}
 \small
 \begin{tabularx}{\columnwidth}{@{}Xrrr@{}}
@@ -123,33 +155,39 @@ Workload & Host & P2P & Ratio \\
 \end{tabularx}
 \end{table}
 
-The recorded tests cover reads at queue depth one. They do not establish write
-performance, queue-depth scaling, or equivalence across local and remote
-backends. Those dimensions require a controlled sweep with the same device,
-requester, workload, repetition count, and timing boundary.
+The draft labels these reads as queue depth one. At 240372.3 IOPS, one
+outstanding request would imply approximately 4.16\,\si{\micro\second} per I/O.
+This cannot describe the same serial per-I/O path as a
+61.41\,\si{\micro\second} submission unless the timing scope or submission
+policy differs. It is a provenance check, not evidence that either value is
+incorrect. A matched experiment must resolve the difference and report the
+device, requester, workload, repetition count, and timing boundary.
 
 \subsection{NIC Data Path}
 
-The single-queue 82580 backend sustains 56.65 and
+The assigned single-queue 82580 physical NIC sustains 56.65 and
 46.82\,\si{\mega\bit\per\second} for TCP in the DUT-to-peer and peer-to-DUT
 directions, respectively. UDP reaches 4.90 and
 7.75\,\si{\mega\bit\per\second}, and ping RTT is
-2.80\,\si{\milli\second}. These results establish bidirectional descriptor
-translation, payload transfer, completion, and interrupt handling. Without a
-matched direct/on-board NIC baseline and the missing workload parameters, they
-do not support a line-rate or relative-performance claim.
+2.80\,\si{\milli\second}. These observations support functional bidirectional
+I/O for the tested configuration; they do not independently verify every
+descriptor transition or ordering condition. A matched NIC baseline and complete
+workload parameters are still needed to assess relative performance. These
+records do not support a line-rate claim.
 
-\subsection{Completion and Interrupt Ordering}
+\subsection{Interrupt Delivery and Ordering Evidence}
 
-Across 100 trigger-and-clear trials, the DUT observed the expected interrupt
-transition without timeout or an unexpected event. After subtracting the
+\sysprevious reports 100 interrupt injection and clearing trials without
+timeouts or unexpected events~\cite{scope2026fpt}. After subtracting the
 measurement baseline, interrupt injection latency is
-956.81\,\si{\nano\second}. Together with successful NVMe and NIC transfers,
-this result checks the externally visible consequence of the ordering rules:
-the driver sees returned data and completion state before it is notified. The
-experiment does not independently expose every internal happens-before edge;
-Figure~\ref{fig:coherence} states the design contract that the implementation
-must maintain.
+956.81\,\si{\nano\second}. These inherited trials support interrupt delivery and clearing
+under the tested conditions, not data-before-completion ordering. Successful I/O
+alone cannot rule out ordering violations that depend on timing or concurrency.
+Figure~\ref{fig:coherence} specifies the required contract rather than a measured
+ordering result. Validation needs instrumented traces or litmus tests that
+check payload visibility before both polled completion and interrupt handling,
+including concurrent traffic, mask changes, and reset. The baseline subtraction
+method and variability of the latency estimate also remain to be documented.
 
 \subsection{Limits of the Current Evaluation}
 
@@ -169,27 +207,20 @@ not measurements and are not used by the abstract or conclusions.
 
 \begin{table*}[t]
 \centering
-\caption{Placeholder matrix for matched performance and composition experiments.}
+\caption{Planned comparisons; all outcomes are pending measurement.}
 \label{tab:measurement-placeholders}
 \small
-\begin{tabular}{@{}p{0.19\textwidth}p{0.26\textwidth}p{0.25\textwidth}p{0.20\textwidth}@{}}
+\begin{tabularx}{\textwidth}{@{}p{0.19\textwidth}p{0.25\textwidth}p{0.25\textwidth}X@{}}
 \toprule
-Experiment & Controlled dimension & Compared paths & Required report \\
+Question & Controlled variation & Comparison & Evidence needed \\
 \midrule
-NVMe read/write sweep & 4/16/128/1024\,KiB; QD 1/4/16/32 &
-host-attached, on-board/P2P, host-remote/proxy &
-bandwidth, IOPS, median/tail latency, repetitions \\
-NIC baseline & protocol, direction, message size, stream count &
-direct/on-board and mediated backend &
-throughput, loss, RTT distribution, host CPU cost \\
-Concurrent composition & NVMe-only, NIC-only, NVMe+NIC &
-same bitstream and endpoint bindings &
-per-device slowdown, correctness, interrupt behavior \\
-Virtualization/passthrough ablation & eligible control mediation and payload path &
-same DUT, device, capabilities, and workload &
-control/tail latency and functional coverage \\
+I/O performance & Request size and queue depth & Direct and mediated paths to the same device & Throughput and latency distributions \\
+Network performance & Protocol, direction, and message size & Direct and mediated paths to the same NIC & Throughput, loss, RTT, and host CPU cost \\
+Composition & One versus two active endpoints & Same bitstream and physical-device assignments & Per-endpoint slowdown and correctness \\
+Path separation & Control mediation and payload route & Matched DUT, device, and workload & Latency and functional coverage \\
+Ordering & Submission, completion, masking, and reset & Instrumented device-visible events & Visibility violations across repeated trials \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table*}
 
 \begin{table}[t]

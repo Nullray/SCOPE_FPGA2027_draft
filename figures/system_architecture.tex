@@ -18,7 +18,7 @@
   memory/.style={module, draw=slate, fill=grayfill},
   region/.style={rounded corners=4pt, draw=slate, fill=white, line width=.8pt},
   fpga/.style={region, draw=blue}, host/.style={region, draw=orange, fill=orangefill!30},
-  backend/.style={region, draw=green, fill=greenfill!28},
+  devices/.style={region, draw=green, fill=greenfill!28},
   ctrl/.style={-{Stealth[length=2.1mm]}, draw=orange, line width=.95pt},
   ctrlbi/.style={{Stealth[length=2.1mm]}-{Stealth[length=2.1mm]}, draw=orange, line width=.95pt},
   data/.style={{Stealth[length=2.2mm]}-{Stealth[length=2.2mm]}, draw=blue, line width=1.3pt},
@@ -30,12 +30,12 @@
     \node[region, minimum width=3.45cm, minimum height=7.0cm, anchor=south west] at (0,0) {};
     \node[fpga, minimum width=3.9cm, minimum height=7.0cm, anchor=south west] at (3.8,0) {};
     \node[host, minimum width=4.15cm, minimum height=7.0cm, anchor=south west] at (8.05,0) {};
-    \node[backend, minimum width=3.15cm, minimum height=7.0cm, anchor=south west] at (12.55,0) {};
+    \node[devices, minimum width=3.15cm, minimum height=7.0cm, anchor=south west] at (12.55,0) {};
   \end{scope}
   \node[anchor=west, font=\small\bfseries, text=navy] at (.22,6.62) {DUT System};
-  \node[anchor=west, font=\small\bfseries, text=navy] at (4.02,6.62) {FPGA Front End};
-  \node[anchor=west, font=\small\bfseries, text=orange] at (8.27,6.62) {Host Software};
-  \node[anchor=west, font=\small\bfseries, text=green] at (12.77,6.62) {Physical Backend};
+  \node[anchor=west, font=\small\bfseries, text=navy] at (4.02,6.62) {FPGA Front-End};
+  \node[anchor=west, font=\small\bfseries, text=orange] at (8.27,6.62) {Host Software Back-End};
+  \node[anchor=west, font=\small\bfseries, text=green] at (12.77,6.62) {Physical Devices};
 
   \node[module] (driver) at (1.72,5.65) {Linux + Native Drivers};
   \node[module] (root) at (1.72,3.75) {Logical PCIe Interface\\[-1pt]\normalfont\tiny ECAM, BAR, INTx};
@@ -46,13 +46,13 @@
   \node[ctlmodule] (irq) at (5.75,2.25) {Interrupt Injector};
   \node[module] (dma) at (5.75,1.05) {DMA Windows};
 
-  \node[ctlmodule] (topo) at (10.12,5.15) {Topology + Configuration\\Manager};
-  \node[ctlmodule] (adapter) at (10.12,3.75) {NVMe / NIC\\Semantic Adapters};
-  \node[module] (xlat) at (10.12,2.25) {DMA Address Translator};
-  \node[ctlmodule] (monitor) at (10.12,1.05) {Completion + Interrupt\\Monitor};
+  \node[ctlmodule] (topo) at (10.12,5.15) {Topology Manager\\[-1pt]\normalfont\tiny configuration + routes};
+  \node[ctlmodule] (adapter) at (10.12,3.75) {Event Dispatcher +\\[-1pt]Device-Semantic Adapters};
+  \node[module] (xlat) at (10.12,2.25) {Endpoint Contexts\\[-1pt]\normalfont\tiny state, binding, address map};
+  \node[ctlmodule] (monitor) at (10.12,1.05) {Interrupt Manager\\[-1pt]\normalfont\tiny pending-state aggregation};
 
   \node[realmodule, text width=2.25cm, minimum height=15mm] (device) at (14.12,3.75)
-    {Selected Real Device\\[-1pt]\normalfont\scriptsize NVMe SSD or 82580 NIC};
+    {Assigned Physical Device\\[-1pt]\normalfont\scriptsize NVMe SSD or 82580 NIC};
 
   \draw[ctrlbi] (root.east) -- node[elabel] {ECAM / BAR} (ecam.west);
   \draw[ctrl] (topo.west) -- node[elabel] {image + routes} (ecam.east);

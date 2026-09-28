@@ -1,151 +1,149 @@
 \section{System Overview}
 \label{sec:overview}
 
-\subsection{Software-Defined Peripheral Subsystem}
+\subsection{Software-Defined Device Contract}
 
-\sys presents a logical PCIe hierarchy to the DUT. A logical endpoint has a
-virtual BDF, configuration image, BAR routes, interrupt state, and a binding to
-a backend. The backend may be a physical function attached to the FPGA host or
-reachable through a remote transport. The DUT names only logical resources; it
-does not know the host BDF, transport endpoint, or host-side DMA aperture.
+Software-defined peripheral access is the \emph{goal}: host software selects a
+supported logical PCIe composition and binds its endpoints to compatible
+physical devices before DUT enumeration. The native driver consumes the
+resulting device contract without knowing the physical attachment. Selection
+is bounded by provisioned FPGA capacity and the semantics supported end to
+end; it does not imply arbitrary device protocols or online hotplug.
 
-Figure~\ref{fig:overview} maps the logical device contract onto the FPGA,
-host coordinator, and physical backends. Four mechanisms realize this mapping:
-logical topology construction, configuration-space virtualization, endpoint
-semantic mediation, and DMA-path realization. The first two determine what the
-DUT sees; the latter two make that device operational.
+The \emph{means} are two decouplings with different roles.
+\emph{Logical presentation--physical device decoupling} separates the contract
+discovered by the DUT from the identity and placement of the assigned physical
+device. It makes composition and binding software choices.
+\emph{Control-semantics--data-path decoupling} separates operations that need
+semantic mediation from payload movement. It permits a host-local DMA path
+without software byte copying, but does not by itself make the device view
+configurable. Table~\ref{tab:decoupling} summarizes these distinct consequences.
 
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=\textwidth]{figures/system_architecture.pdf}
-    \caption{\sys architecture. The DUT accesses a logical PCIe interface
-    implemented by generic FPGA mechanisms. Host software owns topology and
-    device semantics, while a selected physical backend executes device
-    operations. Orange arrows carry control and metadata; blue arrows carry DMA
-    payload and writebacks without traversing the semantic event channel.}
-    \label{fig:overview}
-    \Description{A DUT connects through a generic FPGA front-end to host
-    coordination software and a real NVMe or Ethernet backend. Control and DMA
-    paths are shown separately.}
-\end{figure*}
-
-\subsection{Three Planes and the SDN Analogy}
-\label{sec:planes}
-
-The architecture separates three responsibilities, following the distinction
-between applications, control, and forwarding in software-defined networking
-(SDN)~\cite{onf2014architecture}. In \sys, the \emph{software plane} is the
-DUT's OS and native drivers, which consume a device interface. The
-\emph{control plane} constructs that interface, binds logical endpoints to
-backends, and mediates configuration and device control. Its mechanisms span
-the FPGA front-end and host coordinator. The \emph{data plane} comprises the
-physical backends and the paths through which they exchange payload with DUT
-memory. These are functional responsibilities, not three physical machines;
-host software in the control plane is distinct from DUT software in the
-software plane.
-
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=0.92\textwidth]{figures/three_planes.pdf}
-    \caption{SDN-inspired separation of peripheral access. Control
-    virtualization makes the logical view and binding configurable, while
-    selective passthrough retains execution by a physical backend after required
-    adaptation. Payload movement follows an independently realized data path.
-    Physical execution improves behavioral fidelity for the exposed operations,
-    but does not imply direct-attachment timing or PCIe link fidelity.}
-    \label{fig:planes}
-    \Description{The DUT software plane consumes a virtual device interface.
-    The control plane combines virtualization with selective passthrough. The
-    data plane connects DUT memory to a real NVMe or Ethernet backend.}
-\end{figure*}
-
-The SDN analogy concerns programmable control over a separately realized data
-path. The DUT software plane plays the role of a service consumer, but its
-interface remains a native device protocol rather than an SDN application API.
-The analogy also has a limit: a device submission refers to queues, DMA buffers,
-and ownership transitions. Routing an access to the correct backend is
-insufficient unless these stateful dependencies remain coherent.
-
-Within the control plane, \emph{control virtualization} creates the logical
-configuration and mediates state that differs from the physical backend.
-\emph{Control passthrough} retains physical execution of compatible operations,
-after any required address or protocol adaptation. The two responsibilities
-can coexist for one endpoint. Here passthrough denotes use of the real device,
-not transparent forwarding of every register access or full PCIe function
-assignment. A direct DMA path is a separate choice: payload can bypass the
-software proxy even when submission control is mediated.
-
-\subsection{Dual Decoupling}
-
-Table~\ref{tab:decoupling} separates the two mechanisms. Decoupling device
-presentation from backend implementation answers \emph{what device does the DUT see
-and which backend implements it?} Control-semantics--data-path decoupling
-answers \emph{which operations require semantic mediation and how do payload
-bytes move?} Neither alone is sufficient. The first without the second creates
-a configurable view whose software proxy may become the data bottleneck. The
-second without the first accelerates transfer but leaves device identity and
-placement fixed.
-The three planes identify responsibilities, whereas dual decoupling identifies
-the architectural freedoms between them. The coherence rules below constrain
-both freedoms.
-
-\begin{table}[t]
+\begin{table*}[t]
 \centering
-\caption{Dual decoupling realizes the software-defined abstraction.}
+\caption{Two architectural means to software-defined peripheral access.
+Presentation selection and payload-path selection address different
+boundaries of the same native-driver contract.}
 \label{tab:decoupling}
 \small
-\begin{tabular}{@{}p{0.29\columnwidth}p{0.31\columnwidth}p{0.31\columnwidth}@{}}
+\begin{tabularx}{\textwidth}{@{}p{0.29\textwidth}XX@{}}
 \toprule
-Mechanism & Separates & Enables \\
+Decoupling & Boundary & Role in the method \\
 \midrule
-Device presentation--backend implementation & DUT-visible PCIe identity and behavior from backend placement/realization & Endpoint rebinding, location transparency, software-selected composition \\
-Control semantics--data path & Configuration and device control semantics from bulk payload movement & Programmable mediation with independently optimized DMA paths \\
+Logical presentation--physical device & Driver-visible contract versus physical attachment & Select a supported composition and compatible device binding in software \\
+Control semantics--data path & Semantic mediation versus payload movement & Retain control adaptation without requiring payload bytes to traverse software \\
 \bottomrule
-\end{tabular}
-\end{table}
+\end{tabularx}
+\end{table*}
 
-\subsection{Coherence after Separation}
+A physical device supplies controller and firmware execution for compatible
+operations; virtualization supplies the selected logical view. Retaining
+physical execution does not reproduce direct-attachment timing, because
+mediation changes when operations reach the controller. Section~\ref{sec:discussion}
+develops this configurability--fidelity tradeoff. The demonstrated scope is
+pre-silicon native-driver operation in separate endpoint configurations,
+as reported in Section~\ref{sec:evaluation}.
 
-Dual decoupling distributes one device contract across the DUT, FPGA, host
-software, and physical backend. \sys restores a single observable order with
-three invariants:
+\subsection{Division of Responsibility and the Three Planes}
+\label{sec:planes}
+
+The \emph{FPGA front-end} is the generic DUT-facing hardware that exposes the
+selected PCIe view and transports accesses. The \emph{host software back-end}
+is the host-resident software that owns logical device state, chooses physical
+bindings, and mediates control. Within that software, a \emph{device-semantic
+adapter} interprets a supported protocol, while an \emph{endpoint context}
+holds the state and binding of one logical endpoint. The \emph{physical device}
+is the assigned real controller, not the back-end.
+
+Figure~\ref{fig:overview} relates these responsibilities across configuration
+and runtime. Before enumeration, the back-end supplies the logical state and
+bindings used by the front-end to present the hierarchy. During I/O, the
+front-end delivers control events to the appropriate endpoint context and
+adapter. The physical device executes compatible operations, with host-local
+payload DMA following a separate path to DUT memory.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.88\textwidth]{figures/paper/drawio/fig03_system_architecture_aligned_v3.png}
+    \caption{Configuration and runtime responsibilities in \sys. Phase~1
+    constructs the selected logical hierarchy and ends in native-driver
+    enumeration. Phase~2 mediates control in host software while retaining
+    compatible physical execution and a separate host-local payload path.
+    The endpoint symbols represent provisioned capacity, not a measured
+    concurrent configuration. The lower checks summarize ordering obligations.}
+    \label{fig:overview}
+    \Description{Two horizontal bands show configuration and runtime.
+    The DUT-visible hierarchy, FPGA front-end, and host software back-end
+    occupy aligned positions. Configuration flows from software through the
+    front-end to the hierarchy, with native-driver enumeration at the far right.
+    Runtime control passes through the front-end and software mediation to
+    physical execution; payload DMA connects the physical device to DUT memory.}
+\end{figure*}
+
+This division borrows SDN's separation of programmable control from data
+movement~\cite{onf2014architecture}. Figure~\ref{fig:planes} compares the
+functional planes. The \emph{software plane} in \sys contains the DUT OS and
+native drivers. The \emph{control plane} spans both the FPGA front-end and host
+software back-end, which jointly present the device view and coordinate its
+state. The \emph{data plane} groups physical execution and DUT memory, whose
+host-local payload exchange is distinct from semantic mediation.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/paper/sdn_planes_scope_v2.png}
+    \caption{SDN-inspired separation of responsibilities. SDN programs packet
+    forwarding; \sys presents a stateful native-device contract. Its FPGA
+    front-end and host software back-end share the control plane, and its data
+    plane retains compatible physical execution. Analogous planes do not
+    imply equivalent APIs, reconfiguration granularity, or timing.}
+    \label{fig:planes}
+    \Description{Two aligned three-plane stacks compare SDN applications,
+    controller, and forwarding with SCOPE v2 native drivers, a joint FPGA
+    and host-software control plane, and physical device plus DUT memory.}
+\end{figure}
+
+The important difference is the consumer's contract. An SDN application
+requests network services from a controller that programs forwarding
+behavior. A native DUT driver instead expects configuration, queues, memory
+ownership, completions, and interrupts to behave as one device. The back-end
+must therefore coordinate state across address domains, not merely select a
+forwarding destination. The analogy concerns responsibility separation rather
+than an SDN-style southbound interface or runtime topology programming.
+
+Within the control plane, \emph{control virtualization} constructs the logical
+view and mediates state that differs from the physical device.
+\emph{Control passthrough} retains compatible physical execution after any
+required address or protocol adaptation. Both can apply to one endpoint.
+Passthrough here does not mean transparent forwarding of every register or
+full PCIe function assignment. Payload DMA is an independent choice: it may
+bypass software byte copying even when submission control is mediated.
+
+\subsection{Distributed Device State and Commit Points}
+\label{sec:coherence}
+
+The two decouplings distribute a native-device contract across several state
+owners. Native protocols already require publication before ownership transfer
+and data visibility before completion. The architectural problem is to retain
+those dependencies when logical state, translated metadata, and payload move
+through different components. \sys organizes coordination around three
+per-endpoint commit points:
+
 \begin{description}[leftmargin=*,style=nextline]
-    \item[Configuration--route coherence.] A configuration write completes only
-    after the authoritative image and any affected BAR route agree.
-    \item[Submission--DMA coherence.] A physical doorbell is issued only after
-    the submitted descriptor is stable and every device-visible address has
-    been translated to a reachable target.
-    \item[Data--completion coherence.] The DUT observes completion state or an
-    interrupt only after the corresponding data is visible in DUT memory.
+    \item[Configuration--route coherence.] A configuration write retires only
+    after the authoritative image, its FPGA-visible shadow, and any affected
+    BAR route agree.
+    \item[Submission--DMA coherence.] A physical doorbell transfers ownership
+    only after published work has been observed and its translated state is
+    visible in the physical device's address domain.
+    \item[Data--completion coherence.] Completion becomes driver-visible only
+    after the associated data effects are visible in DUT memory. An interrupt,
+    when enabled, follows that publication.
 \end{description}
-These invariants are not a third decoupling. They constrain the freedom created
-by the two separations so the native driver still observes a legal device.
 
-\subsection{Scope of Software Configuration}
-
-The prototype supports a fixed maximum hierarchy and a finite set of generic
-route entries. Software activates endpoints, chooses their types, assigns BDFs
-under the provisioned switch ports, and binds backends before DUT enumeration.
-This is software-configurable composition, not arbitrary online topology
-rewiring or PCIe hotplug.
-
-\begin{table}[t]
-\centering
-\caption{Longer-term access space and the slice evaluated in this paper.}
-\label{tab:access-space}
-\small
-\begin{tabular}{@{}lll@{}}
-\toprule
-Dimension & Design space & Evaluated slice \\
-\midrule
-DUT stage & Pre-silicon / post-silicon & Pre-silicon \\
-Software access & User / kernel / virtualized & Standard kernel driver \\
-Backend placement & Local / remote & Local and host-remote \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The three dimensions motivate a $2\times3\times2$ design space, but they are
-not independent features that the current prototype already implements in all
-combinations. We use the table to state the intended abstraction boundary and
-the evaluated slice precisely.
+Section~\ref{sec:design} explains the authority and release conditions at each
+point. A request identifier correlates an acknowledgment with an access; it
+does not establish memory visibility. The method assumes a driver that obeys
+the exposed protocol, valid DMA mappings, compatible physical execution, and
+a memory path that preserves the required publication order. The order is per
+endpoint, not a global total order across devices. These conditions delimit
+the method; their statement is not a proof of full protocol equivalence.

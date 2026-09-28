@@ -7,4 +7,6 @@
 /main.log
 /main.out
 /main.pdf
+/figures/paper/*.aux
+/figures/paper/*.log
 /SCOPE_academic_method_revision.patch

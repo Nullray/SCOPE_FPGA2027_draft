@@ -34,9 +34,9 @@
   \node[box, minimum width=4.5cm, minimum height=10mm] (vif) at (7.9,5.12)
     {DUT-Visible Device Interface\\[-1pt]\normalfont\scriptsize Virtual BDFs, BARs, capabilities};
   \node[controlbox, minimum width=4.0cm, minimum height=10mm] (virt) at (4.25,4.05)
-    {Control Virtualization\\[-1pt]\normalfont\scriptsize topology, configuration, routing};
+    {FPGA Front-End\\[-1pt]\normalfont\scriptsize logical interface, event routing};
   \node[passbox, minimum width=4.0cm, minimum height=10mm] (pass) at (11.55,4.05)
-    {Selective Passthrough\\[-1pt]\normalfont\scriptsize physical execution after adaptation};
+    {Host Software Back-End\\[-1pt]\normalfont\scriptsize virtualization, control mediation};
 
   \fill[bluefill!35, rounded corners=4pt] (0,0) rectangle (15.8,2.95);
   \draw[blue, line width=.8pt, rounded corners=4pt] (0,0) rectangle (15.8,2.95);
@@ -46,11 +46,11 @@
   \node[box, minimum width=3.3cm, minimum height=10mm] (dma) at (7.9,1.2)
     {DMA Window / Transport};
   \node[passbox, minimum width=3.7cm, minimum height=10mm] (device) at (12.55,1.2)
-    {Physical Backend\\[-1pt]\normalfont\scriptsize NVMe SSD or 82580 NIC};
+    {Physical Device\\[-1pt]\normalfont\scriptsize NVMe SSD or 82580 NIC};
 
   \draw[ctrl] (drv.south) -- ++(0,-.43) -| node[elabel, pos=.34] {native device contract} (vif.north);
-  \draw[ctrl] (virt.north) -- node[elabel, left] {configurable view} (vif.south west);
-  \draw[ctrl] (vif.south east) -- node[elabel, right] {compatible control} (pass.north);
+  \draw[ctrl] (virt.north) -- node[elabel, left] {exposed interface} (vif.south west);
+  \draw[ctrl] (vif.south east) -- node[elabel, right] {control events} (pass.north);
   \draw[ctrl] (pass.south) -- node[elabel, right] {device command} (device.north);
   \draw[data] (memory.east) -- node[elabel] {payload} (dma.west);
   \draw[data] (dma.east) -- node[elabel] {device DMA} (device.west);

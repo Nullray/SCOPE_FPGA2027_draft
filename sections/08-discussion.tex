@@ -1,84 +1,77 @@
 \section{Discussion and Limitations}
 \label{sec:discussion}
 
-\paragraph{Configurability and fidelity.}
-Virtualization and passthrough contribute different properties to peripheral
-validation. Virtualization lets the user select the exposed hierarchy,
-capabilities, and backend bindings, within the provisioned capacity and
-supported device semantics. Physical execution supplies an independent
-controller and firmware implementation for the operations that reach the
-backend. The resulting fidelity has several dimensions: compatibility of the
-driver-visible protocol, coverage of physical-device behavior, and fidelity of
-timing and concurrency. Native-driver success supports the first for the tested
-workloads; it does not establish the other two in full.
+\subsection{The Configurability--Fidelity Boundary}
 
-More mediation provides additional points at which to observe or modify
-interaction, but also increases adapter state, processing cost, and the risk
-of masking device behavior. For example, capability filtering removes
-unsupported interrupt modes, while descriptor translation and delayed doorbell
-forwarding can change queue occupancy and race exposure. More passthrough
-reduces this intervention but restricts the exposed interface to semantics and
-address domains that the backend can safely consume. It also ties validation
-coverage to the available physical devices. \sys places the boundary at the
-operations needed to preserve the logical device contract; its configurability
-does not imply arbitrary identities, features, or fault scenarios.
+Virtualization and physical execution contribute different properties to
+peripheral validation. Virtualization lets the user select a supported
+DUT-visible hierarchy and compatible physical-device assignments. Physical
+execution exposes the driver to an independent controller and firmware for
+operations that reach the device. Neither property subsumes the other: a
+configurable identity does not create unsupported device behavior, and direct
+physical execution does not by itself make the DUT-visible composition
+configurable. The resulting fidelity has at least three dimensions:
+driver-protocol compatibility, coverage of physical-device behavior, and
+fidelity of timing and concurrency. Native-driver success supports the first
+for tested workloads, not the other two in full.
 
-\paragraph{Choosing and evaluating the boundary.}
-For OS bring-up and functional I/O validation, a configurable view backed by
-real execution can exercise native drivers across device bindings. Experiments
-on precise interrupt timing, queue races, or link behavior require a more direct
-reference path and an explicit account of mediation effects. A controlled
-comparison should hold the DUT, backend, workload, and exposed capabilities
-constant while varying only eligible control mediation and payload paths.
-It should report configuration coverage, correctness under reset and concurrent
-I/O, control and tail latency, throughput, host CPU cost, and FPGA resources.
-The present measurements characterize individual paths; they do not establish
-an optimal tradeoff. Configurable fault injection is a possible use of the
-mediation boundary, but remains outside the demonstrated functionality.
+Mediation gives the system a point at which to reconcile logical and physical
+state, but it can change the timing and concurrency that a driver sees.
+Allowing more direct physical execution reduces that intervention, yet only
+operations already valid in the physical device's protocol and address domain
+can take this path. \sys mediates where the logical contract requires it and
+retains physical execution elsewhere. This is a functional design choice, not
+a claim that the resulting system matches direct attachment in time or in
+every corner case.
 
-\paragraph{Validation scope.}
+\subsection{Evaluating the Boundary}
+
+Commit points make the mediation boundary more precise than a choice between
+virtualization and passthrough. The configuration acknowledgment controls when
+a logical view can be relied on, the physical doorbell controls ownership
+transfer, and completion publication controls when the driver may consume data.
+Moving a control operation into software is safe only if these dependencies
+survive the move. In particular, direct payload DMA does not eliminate the
+need for an ordered completion path, and delaying notification cannot correct
+premature completion visibility.
+
+The placement of mediation is itself a design choice. FVM moves storage
+virtualization onto an FPGA to reduce host resource demand
+\cite{kwon2020fvm}; \sys retains device-specific semantics in the host software back-end to
+make peripheral adaptation a software concern.
+% <!--ref:kwon2020fvm--><!--anchor:section:1-->
+The tradeoff should therefore be measured on both sides of the boundary:
+software control cost and FPGA resource cost. For OS bring-up and functional
+I/O validation, a configurable view backed by real execution can exercise
+native drivers across compatible physical assignments. To compare timing or
+resource cost, however, a controlled experiment must hold the DUT, physical
+device, workload, and exposed capabilities constant while varying the eligible
+mediation or payload path. It should measure correctness under reset and
+concurrent I/O alongside latency, throughput, host CPU cost, and FPGA area.
+The current path measurements do not establish an optimal placement.
+
+\subsection{Validity and Generalization}
+
 \sys validates enumeration, driver initialization, runtime control, DMA, and
-interrupt handling against a physical backend. Because it terminates the
-DUT-side accesses above the PCIe link, it cannot validate PHY training, LTSSM,
-link errors, DLLP/TLP replay, equalization, or electrical behavior. It
+interrupt handling against a physical device. Because it terminates the
+DUT-side accesses above the PCIe link, it cannot validate link training,
+link-layer recovery, or electrical behavior. It
 complements rather than replaces a physical protocol analyzer or direct-link
 test.
 
-\paragraph{Extending device types.}
-A new queue-based PCIe device can reuse topology, ECAM, dispatch, and DMA-window
-mechanisms, but still needs a semantic adapter that identifies submission
-points, translates its DMA-bearing structures, and defines completion ordering.
-The NIC experience shows why generic MMIO forwarding is insufficient. A useful
-future metric is adapter complexity and the fraction of logic reused across
-devices, rather than device count alone.
+Extending the method to another device type requires a semantic account of its
+submission, memory ownership, completion, and interrupt behavior. Generic
+interface reuse cannot remove that work. Adapter complexity and reusable FPGA
+capacity, rather than device count alone, are therefore relevant measures of
+generality. Software-mediated submissions may also become a bottleneck when
+their frequency rises relative to payload work; the measured control latency
+makes this a concrete concern for faster DUTs and deeper queues.
 
-\paragraph{Performance envelope.}
-Software control mediation is appropriate when setup and submission rates are
-modest relative to payload work. Faster DUTs, deep queues, or packet-scale
-doorbells may expose the tens-of-microseconds path as a bottleneck. Batching,
-doorbell coalescing, faster event transport, and selectively moving stable
-parsing operations into parameterized hardware are possible responses without
-abandoning the overall separation.
-
-\paragraph{Topology and isolation.}
-The current system configures a pre-provisioned hierarchy before boot and gives
-each physical function to one backend. It does not provide hotplug, arbitrary
-switch construction, SR-IOV sharing, malicious-DUT isolation, or live migration.
-Those features require explicit IOMMU policy, reset containment, per-vector
-interrupt remapping, and failure recovery.
-
-\paragraph{Beyond pre-silicon prototypes.}
-The logical subsystem abstraction could also front a fabricated DUT or support
-user-space and paravirtual drivers. This produces an attractive longer-term
-design space across development stage, driver model, and backend placement.
-The present paper does not count those combinations as implemented features;
-post-silicon reuse requires a compatible access front-end and separate evidence.
-
-\paragraph{Interpretation of the contribution.}
-The central claim is methodological: a stable, software-configurable device
-presentation can be separated from backend realization when control semantics
-and payload movement are treated as different planes and connected by explicit
-coherence rules. The current prototype is evidence for that method in one
-pre-silicon slice. MSI/MSI-X, multi-queue operation, AER, hotplug, Vortex/GDS,
-post-silicon reuse, and the full $2\times3\times2$ space are extensions, not
-unstated results of the present evaluation.
+The present prototype configures a bounded hierarchy before boot and assigns
+one physical function to each logical endpoint. It does not establish online
+hotplug, shared-device isolation, or live migration. Nor do its pre-silicon
+results demonstrate post-silicon reuse or alternative driver models. The
+central claim is narrower: a software-selected native-device view can be
+separated from physical attachment by coordinating logical authority, routing,
+and ownership publication over a valid memory path. The prototype provides one tested slice of that
+method, not proof of every possible configuration or timing regime.

@@ -1,0 +1,82 @@
+[
+  {
+    "figure": "fig01_access_tradeoff",
+    "exactReferenceBytes": true,
+    "cells": 39,
+    "edges": 9,
+    "labels": 21,
+    "errors": []
+  },
+  {
+    "figure": "fig02_driver_contract",
+    "exactReferenceBytes": true,
+    "cells": 20,
+    "edges": 6,
+    "labels": 10,
+    "errors": []
+  },
+  {
+    "figure": "fig03_system_architecture",
+    "exactReferenceBytes": true,
+    "cells": 78,
+    "edges": 26,
+    "labels": 25,
+    "errors": []
+  },
+  {
+    "figure": "fig04_sdn_planes",
+    "exactReferenceBytes": true,
+    "cells": 17,
+    "edges": 1,
+    "labels": 10,
+    "errors": []
+  },
+  {
+    "figure": "fig05_coherence_contracts",
+    "exactReferenceBytes": true,
+    "cells": 24,
+    "edges": 5,
+    "labels": 13,
+    "errors": []
+  },
+  {
+    "figure": "fig06_topology_reconfiguration",
+    "exactReferenceBytes": true,
+    "cells": 19,
+    "edges": 6,
+    "labels": 12,
+    "errors": []
+  },
+  {
+    "figure": "fig07_semantic_dma",
+    "exactReferenceBytes": true,
+    "cells": 21,
+    "edges": 4,
+    "labels": 11,
+    "errors": []
+  },
+  {
+    "figure": "fig08_measurement_boundaries",
+    "exactReferenceBytes": true,
+    "cells": 22,
+    "edges": 9,
+    "labels": 13,
+    "errors": []
+  },
+  {
+    "figure": "fig05_commit_points_v3",
+    "exactReferenceBytes": true,
+    "cells": 28,
+    "edges": 4,
+    "labels": 15,
+    "errors": []
+  },
+  {
+    "figure": "fig03_system_architecture_aligned_v3",
+    "exactReferenceBytes": true,
+    "cells": 78,
+    "edges": 26,
+    "labels": 25,
+    "errors": []
+  }
+]
