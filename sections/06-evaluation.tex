@@ -50,20 +50,7 @@ LUTs (0.85\%), 14,749 fewer flip-flops (2.90\%), and 142 fewer 36-Kb BRAM tiles
 (11.72\%) than the original Root Port configuration. Percentages are relative
 to the total resource usage of the original configuration.
 
-% Declare the wide plot early so it can accompany the data-path subsection.
-\begin{figure*}[t]
-\centering
-\includegraphics[width=\textwidth]{figures/nvme_throughput.pdf}
-\caption{Sequential NVMe throughput versus fio transfer size across the three
-configurations. Points show three-run arithmetic means; error bars indicate
-the minimum and maximum.}
-\label{fig:nvme-throughput}
-\Description{Two panels compare sequential read and write throughput across
-six transfer sizes from 4 KiB to 1 MiB. Host-local read throughput closely
-tracks on-board throughput. Host-local write throughput falls further below
-the on-board baseline at 1 MiB. Host-remote throughput increases with transfer
-size but remains below the other configurations.}
-\end{figure*}
+
 
 \subsection{Control-Path Overhead}
 
@@ -167,6 +154,28 @@ a preinitialized 1-GiB ext4 file.
 \end{table}
 
 
+
+\begin{figure}[!t]
+\centering
+\captionsetup[subfigure]{skip=1pt}
+\begin{subfigure}{\columnwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/nvme_throughput_read.pdf}
+\caption{Sequential read}
+\end{subfigure}
+\par\vspace{3pt}
+\begin{subfigure}{\columnwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/nvme_throughput_write.pdf}
+\caption{Sequential write}
+\end{subfigure}
+\caption{Sequential NVMe throughput across three configurations. Markers show
+three-run means; vertical bars indicate min--max ranges. Block size is shown
+on a $\log_2$ scale.}
+\label{fig:nvme-throughput}
+\Description{Vertically stacked read and write panels compare three configurations
+across six transfer sizes. Both panels share the same axis ranges.}
+\end{figure}
 
 Figure~\ref{fig:nvme-throughput} extends this comparison across fio transfer sizes from 4 KiB to
 1 MiB. Host-local read throughput tracks the on-board baseline throughout
