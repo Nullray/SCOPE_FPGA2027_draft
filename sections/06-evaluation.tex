@@ -15,6 +15,9 @@ RISC-V processor running at 50\,MHz. Table~\ref{tab:platform} summarizes the
 hardware and software configuration. The on-board configuration connects the
 peripheral directly to the FPGA platform; host-local and host-remote place it
 on the FPGA-connected host and a separate RDMA-accessible host, respectively.
+We use iWARP to match the RDMA capabilities of our existing Ethernet adapters.
+The same remote-peripheral approach could be adapted to other RDMA transports,
+although this evaluation uses only iWARP.
 The on-board baseline uses a bitstream and device tree configured for direct
 PCIe access, whereas both host-based configurations access the peripherals
 through \sys. Measurement procedures and workload parameters are described
@@ -74,18 +77,10 @@ timed interval.
 \toprule
 Operation & On-board & Host-local & Host-remote \\
 \midrule
-BAR write + fence & 2.448 & 16.624 & 468.370 \\
-SQ doorbell write + fence & 4.692 & 59.379 & 1113.010 \\
+BAR write & 2.448 & 16.624 & 468.370 \\
+SQ doorbell write & 4.692 & 59.379 & 1113.010 \\
 \bottomrule
 \end{tabularx}
-\par\smallskip
-\begin{minipage}{\columnwidth}
-\footnotesize
-BAR results are averaged over ten runs of 1,000 accesses,
-while doorbell results are averaged over three runs of 100 commands each.
-All valid samples are retained, and a fixed six-cycle instrumentation overhead
-is subtracted from both measurements.
-\end{minipage}
 \end{table}
 
 Table~\ref{tab:control} shows that BAR write latency increases from
@@ -144,13 +139,6 @@ Random read, 4 KiB (IOPS) & 178.068 & 176.410 & 136.206 \\
 Random write, 4 KiB (IOPS) & 161.792 & 140.619 & 105.950 \\
 \bottomrule
 \end{tabularx}
-\par\smallskip
-\begin{minipage}{\columnwidth}
-\footnotesize
-Results are arithmetic means over three runs, each preceded by
-a 10-s warm-up. Reads access the raw namespace; writes overwrite
-a preinitialized 1-GiB ext4 file.
-\end{minipage}
 \end{table}
 
 
@@ -174,7 +162,7 @@ three-run means; vertical bars indicate min--max ranges. Block size is shown
 on a $\log_2$ scale.}
 \label{fig:nvme-throughput}
 \Description{Vertically stacked read and write panels compare three configurations
-across six transfer sizes. Both panels share the same axis ranges.}
+across five transfer sizes. Both panels share the same axis ranges.}
 \end{figure}
 
 Figure~\ref{fig:nvme-throughput} extends this comparison across fio transfer sizes from 4 KiB to
@@ -189,6 +177,28 @@ close to the on-board baseline even though individual control operations
 are slower. Remote placement trades throughput for backend-location
 flexibility, allowing the DUT to access a physical NVMe device across hosts
 through its native software stack.
+
+\begin{table*}[t]
+\centering
+\caption{Representative peripherals, backend placements, and functional validation.}
+\label{tab:peripheral-validation}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}>{\raggedright\arraybackslash}p{0.23\textwidth}>{\raggedright\arraybackslash}X@{}}
+\toprule
+Peripheral & Backend placement & DUT software stack & Functional validation \\
+\midrule
+NVMe SSD & Host-local / Host-remote & Linux \texttt{nvme} driver & Sequential and random reads/writes \\
+\addlinespace
+Ethernet NIC & Host-local / Host-remote & Linux \texttt{igb} driver & ICMP connectivity \\
+\addlinespace
+Vortex GPGPU & Host-remote & Vortex driver and runtime & Vector addition, matrix multiplication, convolution, BFS, sorting, and multi-kernel workloads \\
+\addlinespace
+FSA attention accelerator & Host-remote & FSA runtime & FlashAttention \\
+\bottomrule
+\end{tabularx}
+\end{table*}
 
 % Declare the wide evidence table ahead of its subsection for page-top placement.
 \begin{table*}[t]
@@ -224,29 +234,68 @@ Completion interrupt loss &
 Completion consumed; no reset observed; subsequent reads and interrupts succeed. \\
 \bottomrule
 \end{tabularx}
-\par\smallskip
-\begin{minipage}{\textwidth}
-\footnotesize
-Intervention entries show selected host-log fields; driver excerpts omit
-timestamps and common prefixes. For interrupt loss, IRQ increments are 10, 9,
-and 10 for the precheck, injection, and follow-up batches, respectively; each
-batch contains ten 4-KiB reads.
-\end{minipage}
 \end{table*}
 
-\subsection{Peripheral Configurability and Functional Validation}
+% Declare the log excerpt early for column-bottom placement, away from Table 6.
+\begin{figure}[!b]
+\centering
+\begin{minipage}{\columnwidth}
+\small\ttfamily\raggedright
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+=== /bin/vortex-conv3 -n 32 ===\par
+matrix size: 32x32\par
+upload source buffer\par
+upload weight buffer\par
+load kernel module\par
+start device\par
+download destination buffer\par
+...\par
+verify result\par
+PASSED!\par
+\end{minipage}
+\captionsetup{skip=4pt}
+\caption{Selected DUT-side Vortex convolution-test output showing data
+transfers, kernel launch, and successful result verification.}
+\label{fig:vortex-functional-trace}
+\Description{Selected original DUT log lines show a 32-by-32 convolution test,
+input and weight uploads, kernel loading, device start, output retrieval,
+and a successful result check. Auxiliary and performance output is omitted.}
+\end{figure}
+
+\subsection{Functional Validation}
 \label{sec:functional-validation}
 
-\noindent\textit{Planned evaluation; experimental evidence pending.}
-% Planned scope: validate configurable DUT-visible peripheral types and backend
-% locations using NVMe, NIC, Vortex, and FSA, subject to collected evidence.
-% Retain enumeration, driver-binding, and a minimal functional-test record for
-% each tested configuration. Distinguish native from device-specific drivers.
-% Summarize device type, backend location, driver, and functional test in a
-% compact table. Record bitstream and DUT software identities when claiming
-% configuration changes without rebuilding hardware or changing DUT software.
-% Claim concurrent composition only for configurations tested together.
-% Do not infer scalability or functional success from enumeration alone.
+We evaluate the extensibility of \sys using representative peripherals spanning
+conventional I/O devices and compute accelerators. The experimental platform
+combines a XiangShan FPGA prototype, x86 hosts, and U280 accelerator boards.
+In a heterogeneous configuration, \sys concurrently exposes NVMe storage,
+Ethernet networking, a Vortex GPGPU, and an FSA attention accelerator to the
+DUT. Table~\ref{tab:peripheral-validation} summarizes these representative
+devices, their software stacks, and the functional workloads used for validation.
+
+
+
+Beyond enumeration and driver binding, we validate accelerator execution
+using workloads launched from the XiangShan prototype. All Vortex workloads
+listed in Table~\ref{tab:peripheral-validation} pass their application-level
+correctness checks. Figure~\ref{fig:vortex-functional-trace} presents a
+representative convolution-test trace from the XiangShan DUT, showing input
+and weight uploads, kernel loading, accelerator execution, output retrieval,
+and a successful result check. These tests validate the integrated operation
+of the DUT-side software stack and the physical accelerator.
+
+
+
+Taken together, these cases demonstrate that \sys can provide an FPGA
+processor prototype with a configurable environment of heterogeneous
+peripherals at different backend locations. Device-specific mediation in host
+software supports the integration of peripherals with different control
+interfaces and execution models. This enables the processor prototype to
+exercise drivers, runtimes, and application workloads with physical devices
+before processor silicon is available, broadening pre-silicon validation from
+peripheral discovery and driver binding to end-to-end processor--peripheral
+functionality.
 
 \subsection{Fault Injection}
 \label{sec:fault-injection}
@@ -254,12 +303,14 @@ batch contains ten 4-KiB reads.
 \begin{sloppypar}
 Beyond peripheral connectivity, \sys provides software-controlled fault
 injection by selectively intervening in interactions between the DUT and
-physical peripherals. This enables controlled fault scenarios without relying
-on naturally occurring hardware failures, while retaining the physical backend
-and the unmodified DUT driver. We demonstrate this capability with three NVMe
-cases targeting controller initialization, command submission, and completion
-notification. Table~\ref{tab:fault-injection} links each intervention to the
-observed native-driver behavior and subsequent recovery checks.
+physical peripherals. Error conditions that depend on particular device states,
+event sequences, or timing can be difficult to trigger on demand with physical
+devices alone. This control allows developers to introduce targeted abnormal
+conditions while retaining the physical backend and the unmodified DUT driver.
+We demonstrate the capability with three NVMe cases targeting controller
+initialization, command submission, and completion notification.
+Table~\ref{tab:fault-injection} links each intervention to the observed
+native-driver behavior and subsequent recovery checks.
 \end{sloppypar}
 
 
@@ -278,6 +329,3 @@ selected fault conditions and exercise error-handling paths that successful
 I/O alone does not test. This makes abnormal device interactions an explicit,
 software-controlled part of prototype validation, without requiring changes
 to DUT software or waiting for naturally occurring hardware faults.
-
-% Keep evaluation evidence ahead of the following section.
-\FloatBarrier
