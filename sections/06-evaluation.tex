@@ -162,14 +162,15 @@ three-run means; vertical bars indicate min--max ranges. Block size is shown
 on a $\log_2$ scale.}
 \label{fig:nvme-throughput}
 \Description{Vertically stacked read and write panels compare three configurations
-across five transfer sizes. Both panels share the same axis ranges.}
+across four transfer sizes. Both panels share the same axis ranges.}
 \end{figure}
 
-Figure~\ref{fig:nvme-throughput} extends this comparison across fio transfer sizes from 4 KiB to
-1 MiB. Host-local read throughput tracks the on-board baseline throughout
-the sweep, remaining within 4.1\%, while the write-throughput gap reaches
-18.4\% at 1 MiB. Host-remote throughput also increases with transfer size,
-reaching 11.81 MiB/s for reads and 8.20 MiB/s for writes at 1 MiB.
+Figure~\ref{fig:nvme-throughput} extends this comparison across fio transfer sizes from
+4 to 256 KiB. Host-local read throughput tracks the on-board baseline
+throughout the sweep, remaining within 2.9\%. At 256 KiB, host-local write
+throughput is 18.79 MiB/s, 7.9\% below the on-board baseline. Host-remote
+read and write throughput also increase with transfer size, reaching 7.38
+and 5.56 MiB/s, respectively, at 256 KiB.
 
 These results show that software-mediated control need not impose a
 proportional penalty on sustained I/O performance: host-local reads remain
