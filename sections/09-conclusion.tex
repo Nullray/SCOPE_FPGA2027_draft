@@ -1,19 +1,23 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-\sys extends a peripheral-borrowing substrate by presenting a logical
-PCIe view selected in software and consumed by native kernel drivers. Logical presentation is
-decoupled from physical attachment, and control mediation from payload
-movement. The method joins their state owners through configuration
-acknowledgment, physical submission, and completion publication, with explicit
-memory-visibility assumptions. Virtualization makes the supported view and
-compatible binding configurable, while physical devices retain execution.
-The resulting tradeoff is mediation cost and altered timing in exchange for
-configurability, with fidelity bounded by the exposed semantics.
-The prototype evidence shows that a standard Linux stack can
-enumerate and use real NVMe and Ethernet devices through a generic FPGA
-interface in separate endpoint configurations. Prior-platform measurements
-characterize the inherited routing path, while data-path performance remains provisional
-pending measurement reconciliation. Ordering validation, an NVMe+NIC concurrency
-run, matched direct baselines, and the 1/2/4/8/13-slot synthesis sweep remain
-necessary before stronger correctness, performance, and scaling claims.
+\sys extends a peripheral-borrowing substrate with a logical PCIe view selected
+in software and consumed by native kernel drivers. Two decouplings provide the
+architectural means for this software-defined access: logical presentation from physical
+attachment, and control mediation from payload movement. Configuration
+acknowledgment, physical submission, and completion publication reconnect the
+separated state owners under explicit memory-visibility assumptions. The
+result is a configurable supported hierarchy and compatible device assignment that
+retain physical execution, at the cost of mediation and altered timing.
+RDMA attachment instantiates the same responsibilities across hosts, extending
+device placement without changing the native-driver contract.
+
+The prototype demonstrates that a standard Linux stack can enumerate and use
+real NVMe and Ethernet devices through a generic FPGA interface in separate
+endpoint configurations. This evidence supports functional access within the
+exposed contract. Prior-platform measurements characterize the inherited
+routing path, while data-path performance remains provisional pending
+measurement reconciliation. Ordering validation, an NVMe+NIC concurrency run,
+matched direct baselines, and the 1/2/4/8/13-slot synthesis sweep are therefore
+needed before extending the claims to broader correctness, performance, and
+scaling.

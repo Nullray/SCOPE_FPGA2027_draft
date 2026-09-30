@@ -6,18 +6,21 @@
 Software-defined peripheral access is the \emph{goal}: host software selects a
 supported logical PCIe composition and binds its endpoints to compatible
 physical devices before DUT enumeration. The native driver consumes the
-resulting device contract without knowing the physical attachment. Selection
-is bounded by provisioned FPGA capacity and the semantics supported end to
-end; it does not imply arbitrary device protocols or online hotplug.
+resulting device contract without needing to know the physical attachment.
+Selection is bounded by provisioned FPGA capacity and end-to-end semantic
+support. The method considers pre-enumeration configuration, without claiming
+arbitrary device protocols or online hotplug.
 
-The \emph{means} are two decouplings with different roles.
+Two decouplings provide the architectural \emph{means} of achieving this goal,
+with different roles.
 \emph{Logical presentation--physical device decoupling} separates the contract
 discovered by the DUT from the identity and placement of the assigned physical
-device. It makes composition and binding software choices.
+device, making composition and device assignment software choices.
 \emph{Control-semantics--data-path decoupling} separates operations that need
-semantic mediation from payload movement. It permits a host-local DMA path
-without software byte copying, but does not by itself make the device view
-configurable. Table~\ref{tab:decoupling} summarizes these distinct consequences.
+semantic mediation from payload movement. Once control is mediated, this second
+separation permits a host-local DMA path without software byte copying. It does
+not itself make the device view configurable, which is the role of the first
+decoupling. Table~\ref{tab:decoupling} summarizes their distinct consequences.
 
 \begin{table*}[t]
 \centering
@@ -30,46 +33,149 @@ boundaries of the same native-driver contract.}
 \toprule
 Decoupling & Boundary & Role in the method \\
 \midrule
-Logical presentation--physical device & Driver-visible contract versus physical attachment & Select a supported composition and compatible device binding in software \\
+Logical presentation--physical device & Driver-visible contract versus physical attachment & Select a supported hierarchy and compatible device assignment in software \\
 Control semantics--data path & Semantic mediation versus payload movement & Retain control adaptation without requiring payload bytes to traverse software \\
 \bottomrule
 \end{tabularx}
 \end{table*}
 
-A physical device supplies controller and firmware execution for compatible
-operations; virtualization supplies the selected logical view. Retaining
-physical execution does not reproduce direct-attachment timing, because
-mediation changes when operations reach the controller. Section~\ref{sec:discussion}
-develops this configurability--fidelity tradeoff. The demonstrated scope is
-pre-silicon native-driver operation in separate endpoint configurations,
-as reported in Section~\ref{sec:evaluation}.
+With these separations, virtualization supplies the selected logical view and
+a compatible physical device supplies independently implemented I/O execution
+for end-to-end hardware--software interaction.
+Mediation changes when operations reach the controller, however, so retained
+physical execution does not reproduce direct-attachment timing.
+Section~\ref{sec:discussion} examines the tradeoff between configurability and
+fidelity.
+The prototype evidence in Section~\ref{sec:evaluation} supports pre-silicon
+native-driver operation in separate endpoint configurations within that boundary.
 
-\subsection{Division of Responsibility and the Three Planes}
-\label{sec:planes}
+\subsection{System Architecture}
+\label{sec:architecture}
 
-The \emph{FPGA front-end} is the generic DUT-facing hardware that exposes the
-selected PCIe view and transports accesses. The \emph{host software back-end}
-is the host-resident software that owns logical device state, chooses physical
-bindings, and mediates control. Within that software, a \emph{device-semantic
-adapter} interprets a supported protocol, while an \emph{endpoint context}
-holds the state and binding of one logical endpoint. The \emph{physical device}
-is the assigned real controller, not the back-end.
+Figure~\ref{fig:architecture} maps the functional roles of
+Figure~\ref{fig:planes} onto the FPGA prototype, local host, and remote host.
+The \emph{FPGA front-end}
+provides the generic hardware interface consumed by the DUT. A \emph{software
+back-end} mediates device behavior on a host; it is distinct from the
+\emph{physical device}, which executes compatible work. The \emph{local
+software back-end} defines the DUT-visible hierarchy and remains authoritative
+for logical device state. When a device is assigned to another host, a
+\emph{remote software back-end} mediates physical execution there without
+defining a second DUT-visible hierarchy.
 
-Figure~\ref{fig:overview} relates these responsibilities across configuration
-and runtime. Before enumeration, the back-end supplies the logical state and
-bindings used by the front-end to present the hierarchy. During I/O, the
-front-end delivers control events to the appropriate endpoint context and
-adapter. The physical device executes compatible operations, with host-local
-payload DMA following a separate path to DUT memory.
+Within the local back-end, \emph{device assignment} specifies the supported
+logical hierarchy and associates each endpoint with a compatible physical
+device and its host location. This unifies what the DUT discovers with where
+its work executes, without requiring the two to share a physical attachment.
+Runtime control uses four shared
+responsibilities: \emph{device state}, \emph{semantic mediation},
+\emph{address translation}, and \emph{cross-domain transport}. Corresponding
+modules have the same names and positions on both hosts because their roles
+persist when attachment changes. Their state authority differs: the local
+back-end maintains the logical state consumed by the driver, while the remote
+back-end maintains the execution state needed by its assigned device.
+These are functional responsibilities, not claims of identical software
+objects or replicated controller engines.
+
+Semantic mediation consults device state, interprets operations within the
+exposed contract, and invokes address translation before releasing work.
+The local back-end prepares a request from the native driver's operation; the
+remote back-end, when used, adapts that request to its physical execution
+domain. Cross-domain transport carries requests and results across the
+DUT--host or host--host boundary. Here, a domain denotes a distinct device-access
+or execution environment, not a clock domain. The local transport uses device
+assignment to select the local or remote path. A remote request enters the
+remote transport through the RDMA interface and proceeds to semantic mediation,
+which consults device state and address translation before accessing the
+physical device. Results return through mediation and transport. Transport
+therefore supplies connectivity; mediation determines when submission or
+completion may be released.
+
+The front-end exposes a \emph{device access window} through which the DUT
+performs configuration and runtime accesses. Defined configuration reads can
+be served from a committed local copy of software state.
+\emph{Access event identification} resolves control accesses to their logical
+endpoint and operation address, without interpreting device semantics or
+choosing the physical host. Cross-domain transport delivers the resulting
+events to software and returns responses or committed updates to the access
+window. Software-provided interrupt state follows a separate path through
+\emph{interrupt delivery} to the DUT. Thus, configuration reads need not make
+a software round trip, and responses do not pass back through event
+identification. The links in Figure~\ref{fig:architecture} express dependencies
+and interfaces rather than a mandatory processing pipeline.
 
 \begin{figure*}[t]
     \centering
-    \includegraphics[width=0.88\textwidth]{figures/paper/drawio/fig03_system_architecture_aligned_v3.png}
-    \caption{Configuration and runtime responsibilities in \sys. Phase~1
+    \includegraphics[width=\textwidth]{figures/paper/drawio/fig03_system_organization_v4.png}
+    \caption{Architecture and location extension in \sys. The local back-end
+    combines hierarchy selection and physical-device allocation in device
+    assignment. Both hosts retain the same
+    runtime responsibilities, with logical state owned locally and physical
+    execution state maintained at the assigned host. Local and Remote ports
+    make the destination choice explicit. Teal edges trace remote requests
+    and results through transport and semantic mediation; navy edges denote
+    local control and service dependencies. The blue P2P edge denotes the
+    host-local payload path; the RDMA link realizes remote attachment with
+    host-mediated payload transfer, not direct FPGA-to-remote-device DMA.
+    Internal links are service interfaces and state dependencies. Names and
+    role colors connect the architecture to Figure~\ref{fig:overview}.}
+    \label{fig:architecture}
+    \Description{Three regions show the FPGA prototype, local host, and remote
+    host. The front-end contains device access window, access event
+    identification, cross-domain transport, and interrupt delivery. Requests,
+    responses, and interrupt updates have distinct paths. The local software
+    back-end adds device assignment above four runtime
+    modules: device state, semantic mediation, address translation, and
+    cross-domain transport. The same four modules occupy corresponding
+    positions remotely, with execution state rather than logical authority.
+    The local transport selects local peripherals or the remote RDMA path.
+    Peripherals and RDMA NICs are outside the host frames. A blue host-local
+    P2P DMA edge connects local peripherals directly to DUT memory, and a teal
+    path connects the RDMA NICs to remote transport and then semantic mediation.
+    Remote physical-device control originates from semantic mediation, not
+    transport. No direct remote-device P2P edge is shown.}
+\end{figure*}
+
+Payload movement remains separate from the control responsibilities. For a
+host-local device, an FPGA-exposed DMA aperture makes DUT memory reachable in
+the device's address domain, enabling P2P transfer without a software payload
+relay. Figure~\ref{fig:architecture} shows that endpoint-to-memory relation
+directly, abstracting the mapping and physical routing rather than removing
+them. A remote device instead operates in its host's address domain, with
+RDMA carrying data between hosts. The depicted remote realization uses
+host-mediated payload transfer. Control/data separation therefore permits
+different data paths; it does not imply that every path avoids software copying.
+
+RDMA is an instance of location extension, not a separate native-driver
+abstraction. The DUT continues to consume the selected device contract, while
+the local back-end routes work and the remote back-end preserves compatible
+physical execution. Before returning a result, the remote side completes the
+required data transfers. The local side then makes the associated data
+DUT-visible before publishing logical completion. The obligations remain the
+same as for local attachment even though the address domains, copy count, and
+latency differ. Section~\ref{sec:design} states the corresponding release
+conditions; remote attachment does not imply transparent bus extension or
+direct-attachment timing.
+
+Figure~\ref{fig:overview} presents the corresponding two-stage use of this
+architecture. Before enumeration, the back-end supplies logical state and
+device assignments for the front-end to present the selected hierarchy. During I/O, the
+front-end delivers control events to the endpoint context and semantic adapter,
+which prepare compatible operations for the physical device. Payload DMA
+follows the separate host-local memory path. The repeated component names and
+colors connect these operations to the roles in Figure~\ref{fig:architecture}.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.88\textwidth]{figures/paper/drawio/fig04_configuration_runtime_v6.png}
+    \caption{Configuration and runtime use of the architecture in
+    Figure~\ref{fig:architecture}. Phase~1
     constructs the selected logical hierarchy and ends in native-driver
     enumeration. Phase~2 mediates control in host software while retaining
     compatible physical execution and a separate host-local payload path.
-    The endpoint symbols represent provisioned capacity, not a measured
+    This usage illustration depicts the host-local execution instance; remote
+    attachment retains its driver contract with the additional host boundary
+    shown in Figure~\ref{fig:architecture}. The endpoint symbols represent provisioned capacity, not a measured
     concurrent configuration. The lower checks summarize ordering obligations.}
     \label{fig:overview}
     \Description{Two horizontal bands show configuration and runtime.
@@ -80,57 +186,30 @@ payload DMA following a separate path to DUT memory.
     physical execution; payload DMA connects the physical device to DUT memory.}
 \end{figure*}
 
-This division borrows SDN's separation of programmable control from data
-movement~\cite{onf2014architecture}. Figure~\ref{fig:planes} compares the
-functional planes. The \emph{software plane} in \sys contains the DUT OS and
-native drivers. The \emph{control plane} spans both the FPGA front-end and host
-software back-end, which jointly present the device view and coordinate its
-state. The \emph{data plane} groups physical execution and DUT memory, whose
-host-local payload exchange is distinct from semantic mediation.
-
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=\columnwidth]{figures/paper/sdn_planes_scope_v2.png}
-    \caption{SDN-inspired separation of responsibilities. SDN programs packet
-    forwarding; \sys presents a stateful native-device contract. Its FPGA
-    front-end and host software back-end share the control plane, and its data
-    plane retains compatible physical execution. Analogous planes do not
-    imply equivalent APIs, reconfiguration granularity, or timing.}
-    \label{fig:planes}
-    \Description{Two aligned three-plane stacks compare SDN applications,
-    controller, and forwarding with SCOPE v2 native drivers, a joint FPGA
-    and host-software control plane, and physical device plus DUT memory.}
-\end{figure}
-
-The important difference is the consumer's contract. An SDN application
-requests network services from a controller that programs forwarding
-behavior. A native DUT driver instead expects configuration, queues, memory
-ownership, completions, and interrupts to behave as one device. The back-end
-must therefore coordinate state across address domains, not merely select a
-forwarding destination. The analogy concerns responsibility separation rather
-than an SDN-style southbound interface or runtime topology programming.
-
-Within the control plane, \emph{control virtualization} constructs the logical
+Within the control tier introduced in Figure~\ref{fig:planes}, virtualization
+combines with compatible passthrough. \emph{Control virtualization} constructs the logical
 view and mediates state that differs from the physical device.
 \emph{Control passthrough} retains compatible physical execution after any
-required address or protocol adaptation. Both can apply to one endpoint.
-Passthrough here does not mean transparent forwarding of every register or
-full PCIe function assignment. Payload DMA is an independent choice: it may
-bypass software byte copying even when submission control is mediated.
+required address or protocol adaptation. An endpoint can use both, with
+passthrough limited to the compatible operations rather than every register or
+a full PCIe function assignment. This control choice is independent of the
+payload path, which may bypass software byte copying even when submission is
+mediated.
 
 \subsection{Distributed Device State and Commit Points}
 \label{sec:coherence}
 
-The two decouplings distribute a native-device contract across several state
-owners. Native protocols already require publication before ownership transfer
-and data visibility before completion. The architectural problem is to retain
-those dependencies when logical state, translated metadata, and payload move
-through different components. \sys organizes coordination around three
-per-endpoint commit points:
+The separation of responsibilities distributes device state across the
+front-end, software back-ends, and physical device. To retain the native contract, these
+components must preserve publication before ownership transfer and data
+visibility before completion. Logical state, translated metadata, and payload
+follow different paths, so an access must not become visible merely because one
+component has finished processing it. \sys defines three per-endpoint commit
+points at which the relevant dependencies have been satisfied:
 
 \begin{description}[leftmargin=*,style=nextline]
     \item[Configuration--route coherence.] A configuration write retires only
-    after the authoritative image, its FPGA-visible shadow, and any affected
+    after the authoritative image, its FPGA-visible copy, and any affected
     BAR route agree.
     \item[Submission--DMA coherence.] A physical doorbell transfers ownership
     only after published work has been observed and its translated state is
@@ -140,10 +219,11 @@ per-endpoint commit points:
     when enabled, follows that publication.
 \end{description}
 
-Section~\ref{sec:design} explains the authority and release conditions at each
-point. A request identifier correlates an acknowledgment with an access; it
-does not establish memory visibility. The method assumes a driver that obeys
-the exposed protocol, valid DMA mappings, compatible physical execution, and
-a memory path that preserves the required publication order. The order is per
-endpoint, not a global total order across devices. These conditions delimit
-the method; their statement is not a proof of full protocol equivalence.
+These commit points specify release conditions, but request matching alone
+cannot establish them. An identifier correlates an acknowledgment with an
+access, while memory visibility requires guarantees from the memory path. The
+method therefore assumes a driver that obeys the exposed protocol, valid DMA
+mappings, compatible physical execution, and preservation of the required
+publication order. That order is per endpoint, not a global total order across
+devices. Section~\ref{sec:design} details the authority and release conditions
+under these assumptions, without claiming a proof of full protocol equivalence.

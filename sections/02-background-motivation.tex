@@ -1,28 +1,102 @@
 \section{Background and Motivation}
 \label{sec:motivation}
 
-\subsection{Real Devices and the Native-Driver Contract}
+% Keep motivating figures from floating above the background section heading.
+\suppressfloats[t]
+\subsection{Device Presentation and Physical Execution}
 
-Full-system validation exercises more than a register specification. A native
-driver discovers a device, establishes queues and memory ownership, submits
-work, and consumes data and completion state according to a device-specific
-protocol. Controller firmware, reset behavior, DMA ordering, and interaction
-with the unmodified driver all affect what the system observes. A software
-model is useful for early bring-up and fault injection, but its modeled
-behavior is an assumption. A physical device contributes an independent
-implementation of the controller and its firmware.
+Peripheral access combines two choices: the interface visible to the DUT and
+the implementation that executes its work. A \emph{logical device hierarchy}
+specifies the presented endpoints and their organization; the \emph{device
+view} also includes their driver-visible behavior. Device models construct
+that view and implement the corresponding execution behavior. Timing-faithful
+models and modular simulation make configurable full-system experiments
+tractable~\cite{karandikar2018firesim,biancolin2019fased,li2022simbricks}.
+Physical devices instead supply independently implemented I/O behavior for
+end-to-end integration tests, but direct attachment ties the discovered
+composition to available devices and their placement.
 
-Enumeration establishes the device view, but reachability alone cannot
-preserve its runtime contract. A driver transfers ownership of work whose
-memory references may not be reachable from the assigned physical device.
-Relaying its doorbell leaves that address-domain mismatch unresolved.
-Likewise, notifying the driver of completion does not make preceding payload
-writes visible. Figure~\ref{fig:driver-contract} isolates these two missing
-guarantees. A usable contract must prepare reachable work before physical
-execution and make data visible before ownership returns to the driver.
-The coordination mechanism is developed in Section~\ref{sec:design}.
+The value of that participation is system-level validation, not simply greater
+detail in a device model. Feng et al. use real peripherals in an FPGA SoC
+prototype to test functional correctness and end-to-end software execution
+before tape-out~\cite{feng2018accelerator}. Callanan et al. combine pre-silicon
+environments and existing hardware for chip-level verification and integrated
+software testing of an I/O-attached SoC~\cite{callanan2011prototyping}.
+% <!--ref:feng2018accelerator--><!--anchor:section:5,page:10-->
+% <!--ref:callanan2011prototyping--><!--anchor:abstract-->
+These cases motivate testing the DUT's hardware--software interactions with
+physical devices alongside modeled experiments. They do not establish that
+physical access preserves target-system timing or covers all device behavior.
 
-\begin{figure}[t]
+Figure~\ref{fig:design-space} compares these organizations and the transition
+to configurable presentation. \sysprevious makes borrowed physical devices
+accessible through adapted DUT software. \sys adds a software-selected
+hierarchy whose device view can be consumed by native drivers, while retaining
+the borrowing substrate. Both versions retain physical execution and separate
+payload movement. Mediation can nevertheless change timing and concurrency,
+so physical participation alone does not establish direct-attachment fidelity.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/paper/drawio/fig01_access_comparison_v4.png}
+    \caption{Peripheral-access organizations. \sysprevious~\cite{scope2026fpt}
+    uses adapted DUT software for peripheral borrowing; \sys selects the
+    logical device hierarchy and physical-device assignments, exposing a native-driver-facing
+    view over the inherited substrate.
+    Both retain physical execution and separated payload movement. Gray dashed
+    responses denote simulation, while green solid boxes denote physical
+    devices. The payload path depicts a host-local realization, not
+    direct-attachment timing.}
+    \label{fig:design-space}
+    \Description{Four vertically stacked schematics compare device modeling,
+    direct attachment, prior SCOPE, and SCOPE v2. Device modeling connects a
+    native driver through a device model to gray simulated responses. Direct
+    attachment connects the driver through a fixed attachment to a physical
+    device. Prior SCOPE uses adapted DUT software to access a borrowing
+    substrate and a physical device. SCOPE v2 presents a software-selected
+    logical device hierarchy through an FPGA front-end. Its control path passes
+    through the host software back-end to a compatible physical device, while a separate
+    host-local payload path connects DUT memory and the device.}
+\end{figure}
+
+Configurable attachment and configurable presentation therefore solve
+different problems. A fabric can change a physical device's placement without
+constructing a different DUT-visible hierarchy or adapting the device-specific
+queue and direct memory access (DMA) state expected by its
+driver~\cite{li2017composable,lim2024flexforge}. Relocation expands the set of
+reachable resources, but does not determine the logical device contract that
+the DUT can consume.
+
+Extending that contract can also incur hardware cost. We use the \tax to
+describe the incremental hardware and integration cost of adding a device type
+or instance. A new type may require protocol-specific logic, while another
+instance consumes addressable state and routing capacity. Factoring reusable
+I/O services out of application logic is one response to this
+cost~\cite{zhang2017feniks}. Reuse can limit repeated protocol specialization,
+but the capacity cost of additional logical devices remains to be measured.
+Neither reuse nor relocation settles whether the selected view is usable by
+an unmodified driver.
+
+\subsection{Reachability and the Native-Driver Contract}
+
+A configurable hierarchy is useful only if its endpoints behave coherently to
+the driver. The \emph{native-driver contract} extends from discovery and
+configuration to runtime submission, DMA, completion, and interrupt handling.
+A driver discovers a device, establishes queues and memory ownership, submits
+work, and consumes returned state according to the device protocol. Controller
+firmware, reset behavior, and memory ordering therefore affect the observations
+that must be preserved; a legal hierarchy alone does not supply these semantics.
+
+Figure~\ref{fig:driver-contract} explains why forwarding memory-mapped I/O
+(MMIO) is insufficient when the DUT and physical device occupy different address
+domains. A submission can reach the device while its published memory
+references remain unreachable. Relaying the doorbell does not resolve that
+mismatch. At completion, notifying the driver cannot itself make preceding
+payload writes visible. The runtime contract therefore requires reachable
+published work before physical execution and visible returned data before
+completion returns ownership to the driver.
+
+\begin{figure}[!htbp]
     \centering
     \includegraphics[width=\columnwidth]{figures/paper/driver_contract_ai_single_v2.png}
     \caption{Why MMIO reachability is insufficient. (a) Doorbell delivery
@@ -41,35 +115,22 @@ The coordination mechanism is developed in Section~\ref{sec:design}.
     pale-blue and pale-green state boxes linked by solid arrows.}
 \end{figure}
 
-\subsection{Attachment Coupling and the Integration Tax}
+\subsection{Requirements for Software-Defined Access}
 
-Direct attachment couples the topology and capabilities the DUT discovers to
-the physical device and its placement. It also ties device-control semantics
-and the DMA path to that attachment. A PCIe fabric can change where a physical
-device is reached, but relocation alone neither constructs a different
-DUT-visible hierarchy nor translates the device-specific queue and DMA state
-expected by the native driver~\cite{li2017composable,lim2024flexforge}. The
-distinction matters: physical reachability is only one part of the contract in
-Figure~\ref{fig:driver-contract}.
+Together, the composition and runtime constraints motivate a supported logical
+device view that can change independently of physical attachment. Software
+should select the presented hierarchy and compatible physical-device assignments before
+enumeration, without changing the DUT driver or rebuilding the FPGA within
+provisioned capacity. The advertised contract remains bounded by what the
+subsystem and assigned device can jointly implement. Configuration, control,
+memory ownership, completion, and interrupt state must therefore remain
+consistent across their owners.
 
-We define the \tax as the incremental hardware and engineering cost of adding a
-device type or instance to an FPGA validation platform. It includes
-device-specific RTL, configuration state, on-chip buffers, routing pressure, timing
-closure risk, and resynthesis effort. Adding a new \emph{type} may require a
-different protocol state machine; adding another \emph{instance} still consumes
-addressable state and routing capacity. To limit the first cost, \sys keeps
-device-specific control semantics in the host software back-end. Another
-endpoint still consumes generic FPGA state and route entries; whether that
-growth is small enough to matter remains an evaluation question.
-
-\subsection{Design Requirements}
-
-The design must preserve the native-driver contract while allowing the logical
-device view to change. An unmodified DUT OS must enumerate a consistent
-hierarchy, and later control, data, completion, and interrupt state must remain
-consistent despite their different owners. Software mediation must leave room
-for a separate payload path. Within provisioned capacity, changing a supported
-endpoint should require neither a different DUT interface nor a new bitstream;
-the cost of that capacity still needs measurement. \sys targets
-system-software and device interaction above the PCIe link, not electrical or
-link-layer validation.
+Maintaining that consistency should not require every payload byte to traverse
+the mediation software. The method must separate state adaptation from byte
+movement while preserving the required publication order over a valid memory
+path. Reusing a generic FPGA interface can shift device-specific semantics into
+software, but the state and routing capacity for additional endpoints remain
+real costs to be measured. These requirements concern functional interaction
+with system software above the device link, not electrical validation or
+direct-attachment timing fidelity.

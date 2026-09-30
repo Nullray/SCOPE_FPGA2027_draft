@@ -10,80 +10,81 @@ whose target timing is decoupled from the FPGA host memory system
 \cite{biancolin2019fased}. SimBricks composes host, device, and network
 simulators through explicit interfaces and synchronized communication channels,
 including configurations with existing NIC and switch RTL
-\cite{li2022simbricks}. This line of work supports repeatable experiments with
-modeled components, including driver workloads, but the behavior of a model
-remains distinct from execution by a physical controller and its firmware.
+\cite{li2022simbricks}. These systems support repeatable experiments with
+modeled components, including driver workloads. Their evidence concerns the
+behavior represented by the selected models. \sys instead focuses on functional
+interaction between prototyped hardware, native drivers, and assigned physical
+devices, complementing those controlled experiments.
 
-Another line of work changes the resources available to FPGA applications
-rather than the peripheral interface visible to a processor DUT. FPGA
-virtualization spans resource-, node-, and multi-node-level abstractions
-\cite{vaishnav2018survey}. Feniks factors common services into an FPGA operating
-system and supports direct access to local PCIe resources and remote cloud
+Where model-based systems abstract component behavior, FPGA virtualization
+abstracts the resources available to FPGA applications at the resource, node,
+and multi-node levels~\cite{vaishnav2018survey}. Feniks factors common services
+into an FPGA operating system and supports direct access to local PCIe resources and remote cloud
 resources~\cite{zhang2017feniks}. FOS modularizes the FPGA system stack and
 schedules elastic accelerator resources across dynamic workloads
 \cite{vaishnav2020fos}. ViTAL decouples application compilation from runtime
 resource allocation and virtualizes on-board DRAM and Ethernet
-\cite{zha2020virtualizing}; Hetero-ViTAL extends this abstraction across
-heterogeneous FPGA clusters~\cite{zha2021heterovital}. Coyote instead assembles
+\cite{zha2020virtualizing}. Hetero-ViTAL extends this abstraction across
+heterogeneous FPGA clusters~\cite{zha2021heterovital}. Coyote assembles
 virtual memory, communication, networking, and spatial and temporal sharing into
 a common FPGA execution environment~\cite{korolija2020coyote}.
 
-The common consumer here is an FPGA application or tenant, and the abstraction
-being reassigned is fabric capacity or a shared service. This is a different
-boundary from the native peripheral interface consumed by a processor DUT.
-Work that virtualizes a device while retaining physical execution comes closer
-to that interface.
+Across these systems, the consumer is an FPGA application or tenant, and the
+reassigned abstraction is fabric capacity or a shared service. \sys addresses
+a different consumer: a processor DUT whose native drivers expect a peripheral
+device contract. Physical-device virtualization is therefore a closer
+comparison than virtualization of the FPGA resources themselves.
 
 \subsection{Physical-Device Virtualization and Disaggregation}
 
 FVM is the closest comparison at the device interface: it implements storage
 virtualization on an FPGA and directly manages physical NVMe devices
-\cite{kwon2020fvm}. Thus, virtual presentation backed by physical execution is
-an established design choice, not a contribution of \sys alone. The systems
-differ in target and partitioning. FVM accelerates storage virtualization for
-host virtual machines, whereas \sys presents a configurable peripheral
+\cite{kwon2020fvm}. Its combination of virtual presentation and physical
+execution establishes that this design choice predates \sys. The distinction
+lies in the consumer and the placement of mediation. FVM accelerates storage
+virtualization for host virtual machines, whereas \sys presents a configurable peripheral
 hierarchy to an FPGA-hosted processor DUT and keeps device-specific control
 mediation in the host software back-end. This choice avoids an FPGA-resident
-controller engine for each supported device protocol, but adds software control
-latency; its resource benefit must be measured rather than assumed.
+controller engine for each supported device protocol at the cost of software
+control latency. The resulting resource benefit must be measured.
 
 Rack-scale composable systems use PCIe switches to assemble physical compute,
 memory, and I/O resources into workload-specific machines
 \cite{li2017composable}. FlexForge disaggregates on-card memory and host-side
 PCIe bandwidth from individual FPGA chips so those peripheral resources can be
-allocated independently~\cite{lim2024flexforge}. These systems reassign physical
-resources in a fabric. \sys instead constructs a logical PCIe hierarchy at the
-DUT boundary and may adapt commands and DMA addresses before the assigned
-physical device executes them. It is complementary to a composable fabric, not
-a replacement for its transport or isolation mechanisms.
+allocated independently~\cite{lim2024flexforge}. Both approaches reassign
+physical resources through a fabric. At the DUT boundary, \sys adds a logical
+PCIe hierarchy and may adapt commands and DMA addresses before execution by the
+assigned physical device. This presentation and mediation can complement a
+composable fabric while relying on its transport and isolation mechanisms.
 
 \subsection{The Processor-DUT Boundary}
 
 \sysprevious~\cite{scope2026fpt} addresses peripheral borrowing across DUT and
 host address domains. Its direct mode relies on SCOPE-aware DUT software, and
 its proxy mode exposes a split-driver command interface for observation and
-intervention. Routing, payload-path separation, semantic adapters, and physical
-execution are the substrate inherited by \sys. Table~\ref{tab:related-boundaries}
-separates that substrate from the native-driver-facing contract addressed here.
+intervention. \sys inherits its routing, payload-path separation, semantic
+adapters, and physical execution. Table~\ref{tab:related-boundaries} distinguishes
+this inherited substrate from the native-driver-facing contract added here.
 
-The added boundary is a logical PCIe hierarchy whose supported composition
-and physical bindings are selected in host software. Native kernel drivers
-consume that view through discovery and ordinary device operations, rather
-than a SCOPE-specific command interface. Consequently, authoritative
-configuration and FPGA-visible routes must be coordinated with the borrowed
-execution path. The commit-point mechanism in Section~\ref{sec:design} explains
-how configuration retirement, physical submission, and completion publication
-join their distinct state owners. The required protocol ordering is not new;
-its preservation across this configurable presentation boundary is the design
-problem.
+That contract exposes a logical PCIe hierarchy whose supported composition and
+physical-device assignments are selected in host software. Native kernel drivers consume
+the selected view through discovery and ordinary device operations, without a
+SCOPE-specific command interface. Supporting these drivers requires
+authoritative configuration and FPGA-visible routes to remain consistent with
+the inherited execution path. Section~\ref{sec:design} develops commit points
+for configuration retirement, physical submission, and completion publication
+across their distinct state owners. These points preserve ordering required by
+native protocols across the added presentation boundary.
 
-This positions \sys between programmable modeling and physical-resource
-assignment. FVM already combines virtual presentation with physical storage
-execution, and PCIe fabrics already reassign real devices. \sys's contribution
-concerns the native contract consumed by a processor DUT and the placement of
-its mediation in host software over a generic FPGA interface. The two
-decouplings explain that partition, while the commit points make its visibility
-and ownership assumptions explicit.
+The resulting distinction concerns the native contract consumed by a processor
+DUT and its mediation in host software over a generic FPGA interface. \sys
+goes beyond assigning a real device, while leaving compatible execution to that
+device. The two decouplings in the system overview explain this partition, and
+the commit points specify the visibility and ownership conditions that reconnect
+the separated responsibilities. RDMA attachment extends these responsibilities
+to a remote host while retaining the same DUT-facing contract; the transport
+instantiates the method rather than defining its contribution.
 
 \begin{table*}[t]
 \centering
@@ -97,7 +98,7 @@ independent performance or correctness result.}
 Dimension & \sysprevious~\cite{scope2026fpt} & \sys \\
 \midrule
 Software consumer & SCOPE-aware DUT access or split-driver command interface & Native kernel drivers consuming a logical PCIe device view \\
-Architectural emphasis & Borrow physical peripherals across DUT and host address domains & Select the presented hierarchy and compatible bindings in host software \\
+Architectural emphasis & Borrow physical peripherals across DUT and host address domains & Select the presented hierarchy and compatible device assignments in host software \\
 Execution substrate & Routing, semantic adapters, and separated payload movement & Inherits those facilities and retains compatible physical execution \\
 Coordination boundary & Observable cross-domain control and device interaction & Join logical configuration and routes to submission and completion commit points \\
 Evidence attribution & Measurements of the preceding platform & Native-driver configurations distinguished from inherited numerical records \\

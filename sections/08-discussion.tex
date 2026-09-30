@@ -6,72 +6,91 @@
 Virtualization and physical execution contribute different properties to
 peripheral validation. Virtualization lets the user select a supported
 DUT-visible hierarchy and compatible physical-device assignments. Physical
-execution exposes the driver to an independent controller and firmware for
-operations that reach the device. Neither property subsumes the other: a
-configurable identity does not create unsupported device behavior, and direct
-physical execution does not by itself make the DUT-visible composition
-configurable. The resulting fidelity has at least three dimensions:
-driver-protocol compatibility, coverage of physical-device behavior, and
-fidelity of timing and concurrency. Native-driver success supports the first
-for tested workloads, not the other two in full.
+execution adds functional interaction between DUT hardware, native system
+software, and an independently executing device for operations that actually
+reach that device. This tests system integration rather than firmware behavior
+alone. These properties are complementary: changing the logical identity
+cannot create unsupported behavior, while physical
+execution alone cannot make the DUT-visible composition configurable.
 
-Mediation gives the system a point at which to reconcile logical and physical
-state, but it can change the timing and concurrency that a driver sees.
-Allowing more direct physical execution reduces that intervention, yet only
-operations already valid in the physical device's protocol and address domain
-can take this path. \sys mediates where the logical contract requires it and
-retains physical execution elsewhere. This is a functional design choice, not
-a claim that the resulting system matches direct attachment in time or in
-every corner case.
+Their combination must be assessed along at least three dimensions of
+fidelity: driver-protocol compatibility, coverage of physical-device behavior,
+and fidelity of timing and concurrency. Native-driver success supports
+compatibility for the tested workloads. It does not establish full behavioral
+coverage or direct-attachment timing and concurrency.
+
+Mediation reconciles logical and physical state by intervening in the control
+path. That intervention can change the timing and
+concurrency seen by a driver. Compatible operations can pass through with less
+intervention only when they are already valid in the physical device's protocol
+and address domain. \sys therefore mediates where the logical contract requires
+adaptation and retains physical execution elsewhere. This placement enables
+functional access without implying equivalence to direct attachment in timing
+or every corner case.
 
 \subsection{Evaluating the Boundary}
 
-Commit points make the mediation boundary more precise than a choice between
-virtualization and passthrough. The configuration acknowledgment controls when
-a logical view can be relied on, the physical doorbell controls ownership
+Commit points provide a way to assess this placement beyond classifying an
+operation as virtualized or passed through. The configuration acknowledgment
+controls when a logical view can be relied on, the physical doorbell controls ownership
 transfer, and completion publication controls when the driver may consume data.
-Moving a control operation into software is safe only if these dependencies
-survive the move. In particular, direct payload DMA does not eliminate the
-need for an ordered completion path, and delaying notification cannot correct
-premature completion visibility.
+The placement of a control operation is valid only if these dependencies are
+preserved. Direct payload DMA, for example, still requires an ordered completion
+path. Delaying notification cannot compensate for premature completion
+visibility, so correctness must be assessed at publication as well as delivery.
 
-The placement of mediation is itself a design choice. FVM moves storage
+Among placements that satisfy these dependencies, the remaining choice concerns
+resource and performance cost. FVM moves storage
 virtualization onto an FPGA to reduce host resource demand
-\cite{kwon2020fvm}; \sys retains device-specific semantics in the host software back-end to
-make peripheral adaptation a software concern.
+\cite{kwon2020fvm}. \sys retains device-specific semantics in the host software
+back-end, making peripheral adaptation a software concern.
 % <!--ref:kwon2020fvm--><!--anchor:section:1-->
-The tradeoff should therefore be measured on both sides of the boundary:
-software control cost and FPGA resource cost. For OS bring-up and functional
-I/O validation, a configurable view backed by real execution can exercise
-native drivers across compatible physical assignments. To compare timing or
-resource cost, however, a controlled experiment must hold the DUT, physical
-device, workload, and exposed capabilities constant while varying the eligible
-mediation or payload path. It should measure correctness under reset and
-concurrent I/O alongside latency, throughput, host CPU cost, and FPGA area.
-The current path measurements do not establish an optimal placement.
+Evaluating this tradeoff requires measuring both software control cost and FPGA
+resource cost. For OS bring-up and functional I/O validation, a configurable
+view backed by physical execution can exercise native drivers across compatible
+assignments. Determining its timing and resource costs requires a controlled
+comparison that holds the DUT, physical device, workload, and exposed
+capabilities constant while varying the eligible mediation or payload path.
+Such a comparison should assess correctness under reset and concurrent I/O
+alongside latency, throughput, host CPU cost, and FPGA area. The current path
+measurements do not establish an optimal placement.
 
 \subsection{Validity and Generalization}
 
-\sys validates enumeration, driver initialization, runtime control, DMA, and
-interrupt handling against a physical device. Because it terminates the
-DUT-side accesses above the PCIe link, it cannot validate link training,
-link-layer recovery, or electrical behavior. It
-complements rather than replaces a physical protocol analyzer or direct-link
-test.
+The validation boundary follows from where \sys mediates DUT accesses. It
+supports validation of enumeration, driver initialization, runtime control,
+DMA, and interrupt handling against a physical device. Because those accesses
+terminate above the DUT-side PCIe link, the method does not validate link
+training, link-layer recovery, or electrical behavior. It therefore complements
+a physical protocol analyzer or direct-link test.
 
 Extending the method to another device type requires a semantic account of its
 submission, memory ownership, completion, and interrupt behavior. Generic
 interface reuse cannot remove that work. Adapter complexity and reusable FPGA
 capacity, rather than device count alone, are therefore relevant measures of
-generality. Software-mediated submissions may also become a bottleneck when
-their frequency rises relative to payload work; the measured control latency
-makes this a concrete concern for faster DUTs and deeper queues.
+generality. Performance also depends on workload behavior. Software-mediated
+submissions may become a bottleneck when their frequency rises relative to
+payload work, making the recorded control latency a concern for faster DUTs
+and deeper queues. Matched measurements are needed to establish where that
+bottleneck appears.
+
+Device location is a separate axis of extension. The RDMA realization connects
+the same native-driver contract to a physical device on another host, while the
+local software back-end retains the DUT-visible hierarchy and logical state.
+The remote back-end adapts work within its execution and address domain and
+returns results under the same publication obligations. This realization
+illustrates location extensibility, without claiming a new RDMA mechanism.
+The remote payload path uses host-mediated transfer rather than direct
+FPGA-to-device DMA, so copy count and transport delay can differ from the
+host-local P2P path. Quantitative remote-path performance is not established
+by the measurements reported here.
 
 The present prototype configures a bounded hierarchy before boot and assigns
-one physical function to each logical endpoint. It does not establish online
-hotplug, shared-device isolation, or live migration. Nor do its pre-silicon
-results demonstrate post-silicon reuse or alternative driver models. The
-central claim is narrower: a software-selected native-device view can be
-separated from physical attachment by coordinating logical authority, routing,
-and ownership publication over a valid memory path. The prototype provides one tested slice of that
-method, not proof of every possible configuration or timing regime.
+one physical function to each logical endpoint. This configuration scope leaves
+online hotplug, shared-device isolation, and live migration unestablished. The
+pre-silicon results likewise do not demonstrate post-silicon reuse or alternative
+driver models. Within these limits, the central claim is that a software-selected
+native-device view can be separated from physical attachment by coordinating
+logical authority, routing, and ownership publication over a valid memory path.
+The prototype tests a bounded instance of that method, leaving other
+configurations and timing regimes to further evaluation.

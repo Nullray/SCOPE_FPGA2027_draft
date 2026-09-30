@@ -37,29 +37,28 @@
 \author{Anonymous Author(s)}
 
 \begin{abstract}
-FPGA-based processor prototypes require real peripherals, but physical
-attachment and device-specific logic constrain the device composition visible
-to a design under test (DUT). Remote access is insufficient unless discovery,
-control, direct memory access (DMA), and completion preserve the native-driver
-contract.
+Validating processor I/O with system software is an important part of
+FPGA-based prototyping, but physical board interfaces limit the peripheral
+configurations that can be exercised. Peripheral-borrowing methods broaden
+access to host-attached devices, yet reachability alone does not provide the
+device hierarchy and semantics expected by native drivers, limiting the
+fidelity of processor--peripheral interactions.
 
-We present \sys, a software-defined peripheral subsystem that makes supported
-device composition and physical-device assignment software choices before DUT
-enumeration, without changing the native driver. Two
-decouplings provide the architectural means: logical presentation from physical
-attachment, and control semantics from payload movement. A generic FPGA
-front-end presents the PCIe device interface; an authoritative host software
-back-end coordinates logical state with physical execution. Per-endpoint commit
-points join configuration and routes, translated submissions and DMA, and data
-visibility and completion publication. Host-local payload movement can bypass
-software copying while device-specific control remains mediated.
+We present \sys, a software-defined peripheral subsystem that decouples logical
+presentation from physical attachment and control semantics from payload
+movement. Software selects the DUT-visible device hierarchy and binds its
+endpoints to compatible physical devices on local or remote hosts, while the
+FPGA front-end and host software back-ends maintain the native-driver contract.
 
-A processor FPGA prototype runs standard Linux storage and network drivers in
-separate single-endpoint configurations. Inherited control-path measurements
-provide context, not isolated presentation-layer costs. Matched end-to-end
-performance, concurrent composition, and FPGA resource scaling remain
-unestablished. The design enables configurable functional access with an
-explicit boundary on timing fidelity.
+An FPGA prototype runs unmodified Linux storage and network drivers in
+separate single-endpoint configurations; the storage path also reaches a remote
+NVMe device. For 128-KiB sequential reads at queue depth one, host-local
+throughput differs by less than 2\% from the on-board baseline, while
+host-remote throughput reaches 49.1\% of that baseline. Three
+software-injected NVMe faults elicit distinct native-driver
+error-handling responses. These results establish functional access and
+controllable error exposure, but not concurrent composition or
+direct-attachment timing fidelity.
 \end{abstract}
 
 \ccsdesc[500]{Hardware~Reconfigurable logic and FPGAs}

@@ -3,13 +3,121 @@
 The original eight files reconstruct the paper's previous Figures 1--8. They do not
 reuse the old draw.io engineering diagrams in `figures/`. No Greek symbols,
 device identifiers, modules, or claims have been added to the reference content.
-The revised Figures 3 and 5 use `fig03_system_architecture_aligned_v3.png` and
-`fig05_commit_points_v3.png`, exported from their native reconstructions.
-Other existing manuscript image paths are unchanged.
-The former topology Figure 6 is replaced by a configuration-boundary table;
-the former Figures 7 and 8 consequently become Figures 6 and 7.
+The current manuscript uses eight figures: the SDN analogy in the Introduction,
+the comparison and native-driver counterexample in Background, a static
+architecture and its two-phase usage in Overview, then commit points, semantic
+DMA, and measurement boundaries. Native exports are used for Figures 2, 4--6.
+Other existing image paths are unchanged.
+The older topology illustration remains archived and is not reintroduced.
 
-## Latest Figure 3: inset phase-title alignment
+## Current Figures 4 and 5: architecture and use (2026-09-29)
+
+| Role | AI reference | Native editable diagram | Preview |
+| --- | --- | --- | --- |
+| Fig. 4: local/remote architecture | `../system_organization_remote_ai_v9.png` | [fig03_system_organization_v4.drawio](fig03_system_organization_v4.drawio) | [PNG](fig03_system_organization_v4.png), [SVG](fig03_system_organization_v4.svg) |
+| Fig. 5: configuration and runtime | `../configuration_runtime_ai_v6.png` | [fig04_configuration_runtime_v6.drawio](fig04_configuration_runtime_v6.drawio) | [PNG](fig04_configuration_runtime_v6.png), [SVG](fig04_configuration_runtime_v6.svg) |
+
+The double-column architecture locates responsibilities in the FPGA prototype,
+local host and remote host; the two-phase figure explains host-local use of the
+same components. Device assignment combines hierarchy selection and physical
+device/location allocation. Both hosts share Device state, Semantic mediation,
+Address translation and Cross-domain transport, with equal runtime module sizes,
+vertical positions and typography. State is logical locally and execution-facing
+remotely. Teal remote interfaces run through RDMA NICs, remote transport and
+remote mediation. The remote physical-operation interface originates from
+mediation and bypasses the transport box geometrically; it is not unmediated
+passthrough. Local control and state/service dependencies are navy; host-local
+P2P DMA is blue. All peripherals and RDMA NICs are outside host frames.
+Frontend requests follow Device access window, Access event identification and
+Cross-domain transport. Responses return directly to the window; interrupt state
+goes through Interrupt delivery to the DUT. Configuration reads can use the
+committed local copy. Links express interfaces and dependencies, not a fixed
+pipeline. The blue edge connects local peripherals directly to DUT memory;
+mapping and actual routing are abstracted. Remote payload remains host-mediated.
+
+The usage baseline is the author's current edited
+`fig03_system_architecture_aligned_v3.drawio`, not its stale PNG. This source
+is preserved unchanged. Its phase headers meet their outer-frame upper-left
+corners and retain identical rounding; those four frame/header cells are copied
+unchanged in geometry and style in the new sibling. The phase-1 title uses
+device hierarchy. Repeated front-ends and backends now have equal x/width/height;
+all four inner software fields have equal x/width/height/font size. Phase 1 has
+Device assignment and Device state. Enumeration stays at the
+far right and existing memory, device, queue, checks, and payload cells are kept.
+
+Prompts and semantic checks are in `../system_organization_remote_ai_v9.prompt.md` and
+`../configuration_runtime_ai_v6.prompt.md`. Each selected AI image is generated
+and inspected before native reconstruction. The new editable pages contain
+64 and 77 native cells respectively, with no bitmaps; the second pages preserve
+the exact AI source bytes. Text bounds and centering are checked against the
+actual rendered glyphs. Native fonts and flat fills are not pixel-identical
+to AI rasterization.
+
+Rebuild only the two new revisions:
+
+```powershell
+node figures/paper/drawio/build_figures.mjs --only=fig03_system_organization_v4,fig04_configuration_runtime_v6
+node figures/paper/drawio/render_figures.mjs --only=fig03_system_organization_v4,fig04_configuration_runtime_v6
+```
+
+Do not run the unfiltered historical generator: its old v3 function would
+overwrite the author's manual phase-header edit. The archived inset-header
+description below records an earlier revision, not the current layout.
+
+## Current Figure 2: four peripheral-access organizations
+
+- AI source: `../access_comparison_ai_v4.png`.
+- Editable version: [fig01_access_comparison_v4.drawio](fig01_access_comparison_v4.drawio).
+- Native previews: [PNG](fig01_access_comparison_v4.png), [SVG](fig01_access_comparison_v4.svg).
+- Prompt, palette sources and revision record: `../access_comparison_ai_v4.prompt.md`.
+
+Four aligned panels compare device modeling, direct attachment, prior SCOPE,
+and SCOPE v2. The predecessor uses adapted DUT software; v2 adds a selected
+logical device hierarchy and a coherent native-driver-facing view. Both retain
+physical execution and separated payload movement. The label "device hierarchy"
+keeps the methodological claim independent of the current PCIe realization;
+"device view" remains the broader driver-visible behavioral contract.
+
+The palette uses restrained pale software blue, neutral gray and pale sage
+green, informed by Paul Tol's scientific colour schemes. Green is reserved
+for physical devices. Simulated responses use a neutral gray dashed box, not
+the ambiguous old "Modeled I/O" label. Panel observations use semicolons.
+Every label is horizontally and vertically centered; an SVG-baseline offset
+corrects mxGraph's Times New Roman positioning. All 26 rendered label bounds
+are within their allocated areas, with center error at most 0.5 px and no
+clipping. The minimum 38 px label prints at approximately 8 pt in one column.
+
+Rebuild only this revision using `--only=fig01_access_comparison_v4` on both
+`build_figures.mjs` and `render_figures.mjs`. The bitmap-free editable page
+contains 50 native cells, including 15 edges and 26 labels. Its second page
+preserves the exact selected AI reference bytes. Native glyphs, flat fills and
+centering corrections are not claimed to be pixel-identical to AI rendering.
+The introduction and caption are updated; all other manuscript sections,
+tables, bibliography and active figures are unchanged.
+
+## Archived Figure 1 v3: three peripheral-access organizations
+
+- AI source: `../access_comparison_ai_v3.png`.
+- Editable version: [fig01_access_comparison_v3.drawio](fig01_access_comparison_v3.drawio).
+- Native previews: [PNG](fig01_access_comparison_v3.png), [SVG](fig01_access_comparison_v3.svg).
+- Prompt and revision record: `../access_comparison_ai_v3.prompt.md`.
+
+The three stacked schematics distinguish a configurable device model, direct
+physical attachment, and a software-selected native-driver-facing view with
+host-mediated control. In SCOPE v2, the host software back-end is distinct
+from the compatible physical device, and the host-local payload path does not
+pass through software. The FPT figure supplies the comparison structure, not
+the new artwork or a claim of timing equivalence. Its relationship is credited
+in the manuscript caption. The earlier responsibility-band Figure 1 remains
+archived as `fig01_access_tradeoff.drawio`.
+
+Rebuild this revision only with `--only=fig01_access_comparison_v3` on both
+`build_figures.mjs` and `render_figures.mjs`. The editable page matches the
+AI reference's wording, grouping, relative geometry, colors, and paths. Native
+font rasterization and flat fills are not pixel-identical to AI glyphs and
+residual shading; the second page preserves the exact source bytes.
+
+## Archived Figure 3: earlier inset phase-title alignment
 
 - AI source: `../system_architecture_aligned_ai_v3.png`.
 - Editable version: [fig03_system_architecture_aligned_v3.drawio](fig03_system_architecture_aligned_v3.drawio).
@@ -22,7 +130,7 @@ variations in the AI edit. All internal module/edge cells are unchanged from
 the preceding editable reconstruction. The second page embeds the exact AI
 source as a non-editable comparison reference.
 
-## Latest Figure 5: AI design followed by native reconstruction
+## Current Figure 6 (formerly 5): AI design followed by native reconstruction
 
 - AI source: `../coherence_commit_points_ai_v3.png`.
 - Editable version: [fig05_commit_points_v3.drawio](fig05_commit_points_v3.drawio).
@@ -52,7 +160,7 @@ Times New Roman and flat sampled/approximated fills; some arrowheads and glyph
 positions differ. If pixel identity is required, use the exact reference page
 or keep the existing PNG. Do not describe the reference page as editable art.
 
-## Files
+## Historical original reconstruction files
 
 | Figure | Editable file | Rendered preview |
 | --- | --- | --- |
@@ -75,9 +183,9 @@ figure 4 front-end and host software remain together in one control plane.
 From the repository root:
 
 ```powershell
-node figures/paper/drawio/build_figures.mjs
 npm install --prefix .paper-review/drawio-tools mxgraph puppeteer-core --no-audit --no-fund
-node figures/paper/drawio/render_figures.mjs
+node figures/paper/drawio/build_figures.mjs --only=fig03_system_organization_v4,fig04_configuration_runtime_v6
+node figures/paper/drawio/render_figures.mjs --only=fig03_system_organization_v4,fig04_configuration_runtime_v6
 ```
 
 To rebuild only the latest revision without overwriting historical figures:
@@ -87,8 +195,8 @@ node figures/paper/drawio/build_figures.mjs --only=fig05_commit_points_v3
 node figures/paper/drawio/render_figures.mjs --only=fig05_commit_points_v3
 ```
 
-For the Figure 3 alignment revision, use `--only=fig03_system_architecture_aligned_v3`
-with both commands; the historical Figure 3 stays unchanged.
+The prior `fig03_system_architecture_aligned_v3.drawio` is the author's protected
+baseline. Do not regenerate it; rebuild the new usage sibling instead.
 
 The render script uses local headless Chrome; set `SCOPE_FIGURE_BROWSER` to a
 different Chromium executable if needed. The renderer dependency lives in the
@@ -104,7 +212,7 @@ lines and the figure 7 filled bidirectional arrow are native geometry; semantic
 control edges use cell terminals where applicable. Stencil plane labels are
 separate editable text cells and should be selected together when moving them.
 
-## Manuscript edits in this revision
+## Archived manuscript edits in the initial reconstruction revision
 
 The abstract was shortened from 258 to 171 whitespace-delimited source tokens
 (approximately two-thirds; TeX macros and hyphenated terms affect this count),

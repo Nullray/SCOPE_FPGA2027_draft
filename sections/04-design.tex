@@ -1,12 +1,14 @@
 \section{Design}
 \label{sec:design}
 
-\sys coordinates a distributed device contract through explicit commit points.
-The host software back-end owns logical state, the FPGA front-end exposes its
-committed view, and the assigned physical device consumes translated work.
-Figure~\ref{fig:coherence} identifies the events that release an access or
-transfer ownership. This differs from Figure~\ref{fig:driver-contract}, which
-shows why reachability alone cannot provide the native-driver contract.
+\sys preserves the distributed device contract by controlling when state
+becomes visible and ownership changes. The local software back-end owns logical
+state, the FPGA front-end exposes its committed view, and the assigned physical
+device consumes translated work, with remote mediation when required by its
+location. Their coordination follows the dependencies
+motivated in Figure~\ref{fig:driver-contract}.
+Figure~\ref{fig:coherence} identifies the corresponding commit points that
+release an access or transfer ownership.
 
 \begin{figure}[t]
     \centering
@@ -26,20 +28,20 @@ shows why reachability alone cannot provide the native-driver contract.
     completion publication.}
 \end{figure}
 
-\subsection{Defining and Committing the Device View}
+\subsection{Defining and Committing the Device Contract}
 \label{sec:configuration-commit}
 
 Software selects a logical composition and binds each endpoint to a physical
 device before enumeration. A selected contract must be realizable by both the
 device-semantic adapter and the assigned controller: every exposed operation
-needs a supported path from driver request to physical effect and back.
-Changing a binding can preserve that contract when the replacement device is
-compatible. Changing identity fields cannot make an incompatible device
-execute a different protocol.
+needs a supported path from driver request to physical effect and back. This
+condition permits a change of assignment when the replacement device is compatible,
+but a change of identity fields cannot make an incompatible device execute a
+different protocol.
 
-Table~\ref{tab:configuration-freedom} separates the configurable choices from
-their architectural constraints. It describes the method's configuration
-boundary rather than additional tested configurations.
+Table~\ref{tab:configuration-freedom} relates each configurable choice to the
+constraint that remains. The table defines the scope of software selection,
+without implying that every permitted configuration has been tested.
 
 \begin{table*}[t]
 \centering
@@ -53,61 +55,83 @@ Choice & Defined in host software & Constraint that remains \\
 \midrule
 Composition & Active logical endpoints and their organization & Provisioned DUT-facing interface capacity \\
 Device contract & Supported driver-visible behavior & End-to-end support by the adapter and physical device \\
-Physical binding & Compatible device assigned to an endpoint & Valid protocol execution and DMA reachability \\
+Device assignment & Compatible device and host location assigned to an endpoint & Valid protocol execution and DMA reachability \\
 \bottomrule
 \end{tabularx}
 \end{table*}
 
-The back-end is authoritative for writable configuration state. The front-end
-serves reads from a shadow of that state, while access routes determine where
-the discovered address ranges lead. Initial enumeration is enabled only after
-both the image and routes have been installed. Subsequently, the front-end
-holds a configuration write pending and reports it as a control event. The
-back-end applies the change, installs the corresponding shadow and any affected
-route, and then acknowledges that event. The front-end completes the DUT write
-only on the matching acknowledgment.
+Once a contract is selected, the local back-end remains authoritative for writable
+configuration state. The front-end's device access window serves defined
+configuration reads from a committed copy of that state
+and uses routes to resolve the discovered address ranges. Because the image and
+routes describe the same device view, both must be installed before initial
+enumeration is enabled. Later configuration writes can change that view, so
+the front-end holds each write pending and reports it as a control event. The
+local back-end applies the change and installs the corresponding state copy and any
+affected route before acknowledging the event. Only the matching acknowledgment
+allows the front-end to complete the DUT write.
 
-Write retirement is the commit point for subsequent dependent DUT accesses.
-The updates need not occur simultaneously in host and FPGA memory, but their
-installation must precede the acknowledgment. Request matching prevents the
-wrong write from retiring; the visibility of installed state is a separate
-requirement on the control path. This distinction prevents a new BAR assignment
-from retiring while an old route is still in use. The shadow accelerates reads
-without becoming an independent device model.
+Write retirement is therefore the commit point for subsequent dependent DUT
+accesses. Host and FPGA updates need not be simultaneous, but the installed
+state must be visible before acknowledgment. Request matching ensures that the
+right write retires, while this visibility condition ensures that its effects
+are usable. Together, these conditions prevent a new BAR assignment from
+retiring while an old route remains in use. The front-end copy can thus accelerate
+reads while remaining a cache of authoritative state rather than an independent
+device model.
 
 \subsection{Admitting Work and Transferring Ownership}
 \label{sec:submission-commit}
 
-A runtime control access is dispatched to its endpoint context and
-device-semantic adapter. The adapter reconciles operations whose logical state
-or address domain differs from what the physical device can consume.
-Compatible physical operations retain controller execution. The common
-transport identifies the endpoint; the adapter supplies the protocol meaning
-of queue setup, submission, completion, and interrupt-visible state.
+A committed device contract establishes where runtime accesses are routed.
+Access event identification resolves the logical endpoint, and cross-domain
+transport dispatches the access to its endpoint context and device-semantic
+adapter. Semantic mediation interprets queue setup, submission, completion,
+and interrupt-visible state. Where logical state
+or the address domain differs from what the physical device can consume, the
+adapter reconciles that difference before a compatible operation reaches the
+controller.
 
 A submission moves through three semantic states: published by the driver,
 prepared for the physical device, and owned by that device. The native driver
 publishes work in DUT memory before signaling submission. The adapter observes
-the published queue range through the shared memory mapping and checks that
-the entry being inspected is stable. It then translates address-bearing
-metadata, including indirect references, and records the work in the endpoint's
-pending state. Translated metadata must be device-visible before the adapter
-issues the physical doorbell. That doorbell, rather than arrival of the
-original BAR event, commits the ownership transfer.
+the published queue range through the shared memory mapping and checks that the
+entry being inspected is stable. It then translates address-bearing metadata,
+including indirect references, and records the work in the endpoint's pending
+state. Preparation is complete only when the translated metadata is visible to
+the physical device. The adapter can then issue the physical doorbell, which
+commits the ownership transfer. Arrival of the original BAR event only begins
+this process.
 
-This sequence prevents the controller from consuming an untranslated reference,
-but its first and last transitions depend on memory ordering. A stable
-snapshot can detect an entry changing during inspection; repeated agreement
-does not prove that all preceding driver writes have arrived. The host-local
+For a remote assignment, preparation spans both software back-ends. Local
+mediation derives the request from DUT-published work and selects the assigned
+host. Remote mediation prepares compatible physical operations, with address
+translation resolving references in the remote device's domain. Physical
+submission still waits for prepared work and its required data to be visible.
+The additional host boundary changes where these conditions are established,
+not the ownership-transfer rule.
+
+The sequence protects against consumption of untranslated references only if
+its publication and preparation steps preserve memory ordering. Checking
+stability can detect changes to an entry during inspection, but agreement
+across observations does not prove that all preceding driver writes have
+arrived. The host-local
 path therefore requires the shared mapping to preserve driver publication
 before adapter inspection and translated-state visibility before physical
 submission. A transport that cannot provide those properties needs an ordered
-staging or visibility mechanism before it can satisfy the same contract.
-An event acknowledgment is not a replacement for that memory-path guarantee.
+staging or visibility mechanism to satisfy the same contract. Correlating an
+event acknowledgment with a submission cannot supply that memory-path guarantee.
 
-Figure~\ref{fig:semantic-dma} distinguishes preparation of control metadata
-from movement of payload bytes. The adapter changes reachability, while the
-physical device can retain the actual transfer.
+Preparing control metadata does not require software copying of payload bytes.
+For a host-local device, translated references can reach DUT memory through the
+FPGA DMA aperture, allowing the physical device to perform the transfer.
+Figure~\ref{fig:semantic-dma} separates this payload path from metadata
+preparation. In the remote realization, physical DMA is coupled with RDMA
+transfer between host address domains. The depicted host-mediated path does
+not require the remote device to access DUT addresses directly. Each path
+must preserve the memory ownership and
+publication conditions of the exposed contract, even when its copy count and
+timing differ. Address reachability alone does not establish visibility.
 
 \begin{figure}[t]
     \centering
@@ -127,45 +151,50 @@ physical device can retain the actual transfer.
 \subsection{Publishing Completion and Returning Ownership}
 \label{sec:completion-commit}
 
-Address retargeting does not require software copying of the payload. For a
-host-local device, translated references can reach DUT memory through the
-FPGA DMA aperture. A remote device may instead require staging or another
-transport-specific path. Reachability and visibility are distinct properties:
-any chosen path must preserve the memory ownership and publication conditions
-of the exposed contract, even when its copy count and timing differ.
+Completion closes the submission cycle by returning ownership to the driver
+after execution. Before advancing logical state, the adapter associates
+a protocol-valid completion or writeback with outstanding work in the owning
+endpoint context. Completion publication is the first point at which the DUT
+can observe that work as complete, whether by polling or notification. It must
+therefore follow visibility of the associated data and writebacks.
 
-Completion returns ownership to the driver. The adapter associates a
-protocol-valid completion or writeback with outstanding work in the owning
-endpoint context before advancing logical state. Completion publication is
-the first point at which the DUT can observe that work as complete, including
-through polling. If software publishes a logical completion, it must do so
-after the associated data and writebacks are DUT-visible. Where a completion
-record is directly DMA-visible to the DUT, the physical device and memory path
-must order data before the record's valid or ownership indication. Back-end
-polling or a delayed interrupt cannot repair an already visible early record.
+On a remote path, the remote back-end associates a valid physical result with
+outstanding work and finishes the required data return before transmitting
+that result. The local back-end then waits for DUT-visible data before
+constructing and publishing logical completion. Physical and logical
+completion state may advance independently; their relation is governed by
+publication dependencies rather than direct copying of the physical record.
+
+How this order is established depends on the completion path. If software
+publishes a logical completion, it must wait until the data and writebacks are
+DUT-visible. If a completion record is directly DMA-visible to the DUT, the
+physical device and memory path must order data before the record's valid or
+ownership indication. Once an early record is visible, back-end polling or a
+delayed interrupt cannot repair the violation.
 
 For the host-local path, observing a protocol-valid physical completion can
 establish preceding data visibility only if the device's write ordering is
-preserved through the DMA aperture and DUT memory mapping. Coherent access
-removes a copying requirement, not this ordering dependency. This memory-path
-property is an explicit assumption of the method, rather than a consequence
-of matching control-event sequence numbers.
+preserved through the DMA aperture and DUT memory mapping. Coherent access can
+remove the need for copying, but completion still depends on this ordering
+property. The method assumes it explicitly because matching control-event
+sequence numbers cannot establish visibility of device writes.
 
-After completion publication, the back-end updates the endpoint's pending
-and interrupt state. The prototype's shared level interrupt aggregates
-eligible pending states, so consuming or clearing work for one endpoint does
-not clear another endpoint's state. An interrupt is a notification of published
-completion, not the event that makes the payload safe to read. Per-vector
-delivery remains outside the demonstrated contract.
+Once completion is published, the local back-end updates the endpoint's pending and
+interrupt state. The prototype's shared level interrupt aggregates eligible
+pending states, so consuming or clearing work for one endpoint does not clear
+another endpoint's state. This notification follows publication and does not
+itself make the payload safe to read. Per-vector delivery remains outside the
+demonstrated contract.
 
 \subsection{Capacity and Adaptation Cost}
 
-The FPGA front-end supplies protocol-independent interface capacity.
-Supporting another logical instance consumes configuration and routing state;
-supporting another device type extends the semantic contract in host software.
-The architectural hypothesis is that FPGA cost follows generic capacity rather
-than replicated controller engines. The planned 1/2/4/8/13-slot synthesis sweep
-in Section~\ref{sec:evaluation} is needed to quantify that hypothesis, while
-matched control and data measurements are needed to expose the cost of software
-mediation. Neither the contract nor the commit-point diagram substitutes for
-those measurements.
+These coordination rules use protocol-independent interface mechanisms in the
+FPGA front-end. Another logical instance consumes configuration and routing
+state, while another device type extends the semantic contract in host software.
+This partition motivates the hypothesis that FPGA cost follows generic capacity
+rather than replicated controller engines. The planned 1/2/4/8/13-slot synthesis
+sweep in Section~\ref{sec:evaluation} is needed to quantify that growth. Its
+resource results must be considered alongside matched control and data
+measurements, since shifting semantics into software also introduces mediation
+cost. The architectural partition establishes what to measure, not the size of
+the benefit.
