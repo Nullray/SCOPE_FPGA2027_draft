@@ -1,0 +1,32 @@
+\usepackage{libertine}
+\usetikzlibrary{arrows.meta,calc,positioning,fit,backgrounds,shapes.geometric}
+\definecolor{paperink}{HTML}{263441}
+\definecolor{papermuted}{HTML}{647481}
+\definecolor{paperline}{HTML}{CCD5DB}
+\definecolor{paperblue}{HTML}{2D5F91}
+\definecolor{paperbluefill}{HTML}{EFF5FA}
+\definecolor{paperorange}{HTML}{B66731}
+\definecolor{paperorangefill}{HTML}{FCF4EB}
+\definecolor{papergreen}{HTML}{3F7558}
+\definecolor{papergreenfill}{HTML}{EFF6F1}
+\tikzset{
+  papertext/.style={font=\footnotesize, text=paperink},
+  papermini/.style={font=\scriptsize, text=papermuted},
+  paneltitle/.style={font=\footnotesize\bfseries, text=paperink},
+  bluebox/.style={draw=paperblue, fill=paperbluefill, rounded corners=1pt,
+    line width=.6pt, font=\footnotesize, text=paperink, align=center,
+    inner xsep=6pt, inner ysep=5pt},
+  orangebox/.style={draw=paperorange, fill=paperorangefill, rounded corners=1pt,
+    line width=.6pt, font=\footnotesize, text=paperink, align=center,
+    inner xsep=6pt, inner ysep=5pt},
+  greenbox/.style={draw=papergreen, fill=papergreenfill, rounded corners=1pt,
+    line width=.6pt, font=\footnotesize, text=paperink, align=center,
+    inner xsep=6pt, inner ysep=5pt},
+  graybox/.style={draw=paperline, fill=white, rounded corners=1pt,
+    line width=.6pt, font=\footnotesize, text=paperink, align=center,
+    inner xsep=6pt, inner ysep=5pt},
+  orangeflow/.style={-{Stealth[length=2mm]}, draw=paperorange, line width=1pt},
+  blueflow/.style={-{Stealth[length=2mm]}, draw=paperblue, line width=1.15pt},
+  greenflow/.style={-{Stealth[length=2mm]}, draw=papergreen, line width=1pt},
+  grayflow/.style={-{Stealth[length=1.8mm]}, draw=papermuted, line width=.65pt}
+}

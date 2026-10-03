@@ -1,61 +1,133 @@
 \section{Background and Motivation}
 \label{sec:motivation}
 
-\subsection{Why Real Peripherals Matter}
+% Keep motivating figures from floating above the background section heading.
+\suppressfloats[t]
+\subsection{Device Presentation and Physical Execution}
 
-Full-system validation exercises more than a register specification. An NVMe
-driver allocates submission and completion queues, constructs PRP lists, rings a
-doorbell, waits for DMA and then consumes a phase-tagged completion. A NIC driver
-programs descriptor rings, transfers ownership with queue-tail registers, and
-interprets device-specific interrupt causes. Controller firmware, reset corner
-cases, DMA ordering, and the interaction with an unmodified driver all affect
-the observed behavior. A software model is useful for early bring-up and fault
-injection, but every modeled behavior is also an assumption. A physical backend
-provides an independent implementation of the device data plane and firmware.
+Peripheral access involves both the interface presented to the DUT and
+the implementation that executes device operations. A \emph{logical device hierarchy}
+specifies the endpoints exposed to the DUT and their organization. In this
+paper, the \emph{device view} comprises this hierarchy and the behavior
+exposed to DUT drivers.
 
-\subsection{Why Physical Attachment Is Insufficient}
+Device models provide the configuration and behavior
+needed to construct a device view. Timing-faithful models and modular
+simulators support configurable full-system
+experiments~\cite{karandikar2018firesim,biancolin2019fased,li2022simbricks}.
+Physical peripherals allow the DUT and its software to interact with real
+I/O devices, although direct attachment limits the available device
+composition to the prototype's physical interfaces.
 
-Conventional attachment couples three decisions that validation engineers need
-to vary independently:
-\begin{enumerate}[leftmargin=*]
-    \item \textbf{Presentation:} which topology, identities, BARs, and
-    capabilities the DUT discovers;
-    \item \textbf{Control realization:} where configuration and
-    protocol-specific control semantics execute;
-    \item \textbf{Data realization:} how a device reaches DUT memory and how
-    data and completions return.
-\end{enumerate}
-The board topology commonly fixes all three. PCIe extension and disaggregation
-can move the physical device, but do not automatically synthesize the DUT-facing
-topology or translate guest DMA addresses and device semantics. SCOPE therefore
-defines the software-configurable boundary narrowly: the FPGA bitstream provides
-the generic ECAM, route, mailbox, DMA-window, and interrupt mechanisms, while a
-startup backend configuration selects the active endpoints and their bindings.
-This is configuration-only composition within a pre-provisioned hierarchy, not
-arbitrary runtime hot-plug or an unlimited number of physical devices.
+FPGA prototypes can use physical peripherals for system-level validation. Feng et al.
+use real peripherals in an FPGA SoC prototype to test functional correctness
+and end-to-end software execution
+before tape-out~\cite{feng2018accelerator}. Callanan et al. combine pre-silicon
+environments and existing hardware for chip-level verification and integrated
+software testing of an I/O-attached SoC~\cite{callanan2011prototyping}.
+% <!--ref:feng2018accelerator--><!--anchor:section:5,page:10-->
+% <!--ref:callanan2011prototyping--><!--anchor:abstract-->
+Physical-device tests provide integration coverage that complements modeled
+experiments, although the prototyping interface may alter I/O timing.
 
-\subsection{The Peripheral Integration Tax}
+Figure~\ref{fig:design-space} compares how peripherals are exposed to DUT software.
+\sysprevious~\cite{scope2026fpt} makes borrowed devices reachable through
+mapped BARs or split-driver commands. In \sys, the DUT OS enumerates a
+software-selected device hierarchy. Host software maintains driver-visible
+state for each endpoint and coordinates I/O with its assigned physical
+device. Both systems use physical devices and separate
+control handling from payload transfer. \sys also provides the configuration
+and behavior needed for DUT OS enumeration and native-driver operation.
 
-We define the \tax as the incremental hardware and engineering cost of adding a
-device type or instance to an FPGA validation platform. It includes device-
-specific RTL, configuration state, on-chip buffers, routing pressure, timing
-closure risk, and resynthesis effort. Two axes matter. A new \emph{type} may
-require new protocol state machines, whereas another \emph{instance} requires
-more addressable state and routing capacity. No implementation can make the
-second cost zero. Our goal is narrower: keep the FPGA-side per-instance cost to
-generic state and routing entries, and move device-specific state growth to the
-software back-end.
+Device relocation expands the set of reachable resources, but native-driver
+operation also depends on the device hierarchy and behavior exposed to
+the DUT. A fabric can change physical-device placement without adapting
+the driver-visible configuration, queues, or direct memory access (DMA)
+state~\cite{li2017composable,lim2024flexforge}.
 
-\subsection{Requirements}
+Extending peripheral support involves protocol adaptation and interface
+capacity. A new device type may require protocol-specific logic, whereas
+another instance of a supported type consumes configuration state and
+routing capacity. Shared I/O services, as in Feniks~\cite{zhang2017feniks},
+can reduce repeated implementation work. Driver compatibility remains
+a requirement for every presented endpoint.
 
-Four requirements follow. First, an unmodified DUT OS must enumerate and bind
-its native driver. Second, configuration, BAR routing, DMA, completion, and
-interrupt state must remain mutually consistent even though different agents
-own them. Third, control mediation must not force all payload bytes through the
-same software path. Fourth, adding an endpoint within the provisioned capacity
-should not require a different DUT interface or bitstream. The last requirement
-is an implementation property of the generic mechanisms; it still needs a
-capacity sweep before we claim a particular FPGA resource slope. \sys does not
-attempt to reproduce a physical PCIe link: it validates the system-software and
-device interaction above the link layer, not PHY, LTSSM, DLLP, or electrical
-behavior.
+\subsection{Reachability and the Native-Driver Contract}
+\label{sec:native-driver-contract}
+
+Native drivers expect consistent behavior during discovery, configuration,
+request submission, DMA, completion, and interrupt handling. We refer to
+these requirements as the \emph{native-driver contract}.
+Before normal I/O, the DUT OS performs \emph{device enumeration}: its
+PCIe bus subsystem discovers the presented functions and reads their
+configuration to establish identities and resource mappings. Driver matching
+and binding then associate those functions with their native drivers, which
+initialize device-specific queues and establish buffer ownership before
+submitting work.
+Drivers then read completion and interrupt state according to the device
+protocol. The presented endpoint must preserve the behavior expected for
+supported operations, including reset and memory-ordering requirements.
+
+Access to memory-mapped I/O (MMIO) alone does not satisfy these requirements.
+When the DUT and physical device occupy different address domains, forwarding
+a submission write can notify the device while the request it references
+remains inaccessible. The device must be able to address and observe the
+request metadata and required input data before physical submission. On
+completion, returned data must be visible in DUT memory before the driver
+observes a completion record or interrupt. MMIO forwarding must therefore
+be accompanied by address translation and memory-ordering mechanisms for
+both request submission and completion.
+
+\subsection{SDN-Inspired Separation of Responsibilities}
+\label{sec:sdn-principle}
+
+\sys assigns peripheral configuration, control mediation, and physical
+execution to separate components. Software selects the device composition,
+a control subsystem maintains driver-visible state and coordinates I/O,
+and compatible physical devices execute operations. This division is
+inspired by SDN, which separates applications that specify
+network behavior, controllers that coordinate resources, and elements that
+execute forwarding decisions~\cite{onf2014architecture}.
+% <!--ref:onf2014architecture--><!--anchor:section:4.4,section:4.6-->
+Figure~\ref{fig:planes} compares SDN's application, controller, and data planes
+with peripheral configuration, control mediation, and physical execution
+in \sys. A host-side configuration tool selects the supported device
+hierarchy and compatible physical-device bindings. The DUT OS and drivers
+interact with the resulting device view.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/paper/drawio/fig02_sdn_abstraction_sdap.pdf}
+    \caption{Correspondence between SDN planes and peripheral configuration,
+    control mediation, and physical execution in \sys.}
+    \label{fig:planes}
+    \Description{Two aligned columns compare SDN and SDP. Each has one
+    component per layer: network configuration application versus peripheral
+    configuration tools, SDN controller versus SDP control subsystem, and
+    forwarding elements versus physical I/O devices. Configuration and control
+    flow downward; resource state and execution events flow upward.}
+\end{figure}
+
+The FPGA front-end and host software back-ends jointly implement control
+mediation in \sys. They keep configuration and routes consistent,
+prepare device-visible requests before submission, and make returned data
+visible to the DUT before publishing completion. These device-protocol
+requirements determine how the components coordinate I/O; the SDN analogy
+motivates the separation of responsibilities.
+
+\subsection{Requirements for Software-Defined Access}
+
+Software-defined peripheral access must meet two requirements. First,
+software must select the logical device hierarchy and compatible
+physical-device bindings before enumeration, within the provisioned FPGA
+capacity and without changing supported DUT software or the FPGA bitstream.
+Advertised behavior must match what the mediation subsystem and assigned
+device can implement together. Second, the FPGA front-end and host back-ends
+must preserve the driver's ordering requirements for configuration,
+submission, DMA, completion, and interrupt handling.
+
+A valid direct DMA path should remain available for payload transfers
+without requiring software to copy the data. Its use depends on the same
+memory-ordering requirements as a software-mediated path. \sys targets
+functional interaction between DUT software and peripherals. Electrical
+validation and timing equivalence to direct attachment are outside this scope.

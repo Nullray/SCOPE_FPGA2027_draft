@@ -1,76 +1,115 @@
 \section{Related Work}
 \label{sec:related}
 
-\subsection{FPGA Prototyping Infrastructure}
+\subsection{Processor Prototyping and FPGA Services}
 
-FireSim supplies cycle-exact, FPGA-accelerated full-system simulation and
-configurable scale-out models~\cite{karandikar2018firesim}. FASED separates a
-target DRAM model from its FPGA host implementation and makes
-model timing parameters configurable without rebuilding the complete target
-\cite{biancolin2019fased}. LEAP provides reusable services and latency-
-insensitive interfaces for FPGA applications \cite{fleming2014leap}. RIFFA
-offers a portable host--FPGA communication interface \cite{jacobsen2013riffa}.
-These systems show the value of stable FPGA infrastructure and host/target
-decoupling. \sys applies that principle to a different object: a real
-peripheral subsystem that a processor DUT discovers and operates with its
-native device driver. Its challenge includes the coupled configuration, BAR,
-queue, DMA, completion, and interrupt contract.
+Model-based prototyping allows component behavior and timing to be configured.
+RAMP Gold separates functional and timing models for FPGA-based full-system
+simulation~\cite{tan2010rampgold}. FireSim
+provides FPGA-accelerated, cycle-exact simulation of scale-out systems
+\cite{karandikar2018firesim}. FASED generates composable cache and DRAM models
+whose target timing is decoupled from the FPGA host memory system
+\cite{biancolin2019fased}. SimBricks composes host, device, and network
+simulators through explicit interfaces and synchronized communication channels,
+including configurations with existing NIC and switch RTL
+\cite{li2022simbricks}. These systems support repeatable driver and system
+experiments with modeled components. \sys uses physical devices to test
+functional interactions with prototyped hardware and native drivers.
 
-\subsection{Modular Full-System Simulation}
+Commercial prototyping also combines simulation with physical I/O.
+Synopsys' DesignWare Hybrid IP Prototyping Kits combine Virtualizer processor
+and memory models with HAPS-DX FPGA implementations of interface IP and
+real-world connectivity~\cite{synopsys2015hybrid}. These kits support
+pre-silicon software development and integration. \sys uses an FPGA-hosted
+processor DUT whose software accesses host-attached devices through a
+software-selected device view.
 
-SimBricks links simulators for machines, networks, and devices through explicit
-component interfaces and synchronized communication
-channels~\cite{li2022simbricks}. It can integrate existing NIC and switch RTL
-models, making modular simulation a strong option when a suitable model exists.
-\sys addresses the complementary case in which a processor prototype must run
-an unmodified native driver against a physical peripheral. This trades the
-controllability of a device model for execution by real controller hardware and
-firmware, while giving up cycle-exact timing across the mediated boundary.
+FPGA virtualization manages resources for FPGA applications at the resource,
+node, and multi-node levels~\cite{vaishnav2018survey}. Feniks factors common services
+into an FPGA operating system and supports direct access to local PCIe
+resources and remote cloud resources~\cite{zhang2017feniks}. FOS and ViTAL
+modularize system services and
+separate applications from runtime resource allocation
+\cite{vaishnav2020fos,zha2020virtualizing}; Hetero-ViTAL extends virtualization
+across heterogeneous FPGA clusters~\cite{zha2021heterovital}. Coyote combines
+virtual memory, communication, and sharing in a common FPGA execution
+environment~\cite{korolija2020coyote}. At the storage interface, DONGLE 2.0
+lets HLS kernels directly orchestrate NVMe access through a unified memory
+and storage interface~\cite{wong2024dongle}.
 
-\subsection{Modular and Networked FPGA Systems}
+These systems provide services to FPGA applications and tenants. \sys
+targets the OS and drivers of a processor DUT, which discover peripherals
+and issue operations through device protocols.
 
-Galapagos abstracts heterogeneous CPU/FPGA nodes and makes communication layers
-replaceable without changing the application \cite{eskandari2019galapagos}.
-Network FPGA clusters similarly separate logical accelerator groupings from
-physical datacenter placement \cite{tarafdar2017clusters}. These works organize
-compute kernels and their communication. \sys instead organizes devices
-presented to an FPGA-hosted processor: the endpoint must participate in PCIe
-discovery and preserve a vendor protocol expected by an unmodified OS driver.
+\subsection{Physical-Device Virtualization and Disaggregation}
 
-\subsection{FPGA Operating Systems and Device Access}
+Virtual I/O interfaces may follow an existing device protocol or introduce
+virtualization-specific operations. Virtio standardizes virtual-device interfaces used by
+guest drivers~\cite{russell2008virtio}. MDev-NVMe instead retains the native
+guest NVMe driver through mediated pass-through and active
+polling~\cite{peng2018mdev}. LeapIO exposes virtual NVMe storage to unmodified
+guest VMs and offloads storage services to ARM SoCs using a unified address
+space~\cite{li2020leapio}. These approaches combine software mediation with
+guest-driver support in a host VM environment.
 
-Feniks provides an FPGA OS layer, abstract I/O interfaces, direct PCIe access to
-server resources, and a design for remote resource access
-\cite{zhang2017feniks}. HybridOS integrates CPU and reconfigurable accelerators
-under OS runtime support \cite{kelm2008hybridos}. Their service target is an
-FPGA application or accelerator. \sys serves a processor DUT and presents a
-driver-compatible device hierarchy. It does not claim remote access or PCIe
-peer-to-peer transfer as novel in isolation. Its contribution is the software-
-defined endpoint view plus end-to-end mediation needed to take the DUT from
-enumeration through native I/O.
+Device Lending makes a remote PCIe device appear local to an unmodified
+driver~\cite{markussen2018lending}. It injects a device through emulated
+hot-plug, maps its register regions through a non-transparent bridge (NTB),
+and establishes reverse DMA and interrupt mappings. IOMMU-assisted DMA
+translation connects the borrower's buffers to the lender's address domain.
+SmartIO extends PCIe-based borrowing and sharing through distributed
+shared-memory facilities while keeping software out of the payload
+path~\cite{markussen2021smartio}. Remote placement can therefore remain
+transparent to the driver while the assigned physical device executes
+its operations.
 
-\subsection{PCIe Virtualization, Disaggregation, and Composable Fabrics}
+Device Lending provides register, DMA, and interrupt mappings for a
+borrowing host. \sys exposes a logical device hierarchy to an FPGA-hosted
+processor DUT through a generic FPGA front-end. Host software maintains
+logical configuration and endpoint state, and adapts commands and
+address-bearing metadata before physical execution. The host and FPGA
+coordinate configuration updates, prepared submissions, and completion
+visibility through per-endpoint commit conditions.
 
-Device passthrough and composable PCIe fabrics can assign physical functions or
-fabric resources to hosts; PCIe switches can route those functions between
-hosts and devices. Their control plane operates on real PCIe functions
-and links; the primary abstraction is resource assignment in the fabric.
-\sys instead constructs a logical configuration hierarchy at an FPGA prototype
-boundary and may adapt commands and DMA addresses before a physical backend
-executes them. Its abstraction is therefore different in two ways: the DUT
-sees a software-selected device presentation, and the host coordinator
-preserves device-specific control/data semantics across the boundary. \sys is
-complementary to composable PCIe hardware, but its evaluation target is
-system-software validation rather than transparent extension of the physical
-PCIe link.
+FVM implements storage virtualization on an FPGA and directly manages physical
+NVMe devices for host virtual machines~\cite{kwon2020fvm}. Zero2M places
+tenant-level I/O management in an FPGA NVMe controller and uses namespaces to
+identify tenants while retaining the native host storage
+stack~\cite{wang2026zero2m}. Both place device-specific control in FPGA logic.
+\sys keeps device-specific control mediation in host software and uses a
+generic FPGA front-end to present endpoints to the processor DUT. The front-end
+does not require a separate controller engine for each supported protocol,
+although additional endpoints still consume configuration and routing
+capacity. Host mediation adds control latency.
 
-\subsection{Position of SCOPE}
+Rack-scale composable systems use PCIe switches to assemble physical compute,
+memory, and I/O resources into workload-specific machines
+\cite{li2017composable}. FlexForge disaggregates on-card memory and host-side
+PCIe bandwidth from individual FPGA chips so those peripheral resources can be
+allocated independently~\cite{lim2024flexforge}. Both approaches reassign
+physical resources through a fabric. \sys can complement such fabrics by
+constructing the DUT-visible device hierarchy and adapting commands and
+DMA addresses before physical execution. This combination depends on
+the transport and isolation mechanisms provided by the fabric.
 
-Across these systems, the reusable idea is a stable interface between a
-workload and a changing implementation. SCOPE applies that idea to a processor
-DUT that must run a native peripheral driver. The contribution is not a new
-PCIe transport, a new NVMe/NIC protocol, or a claim that remote DMA is novel in
-isolation. It is the method of combining device-presentation--backend-
-implementation decoupling with control-semantics--data-path decoupling, then
-constraining the split with configuration--route, submission--DMA, and
-data--completion coherence.
+\subsection{Peripheral Access for Processor DUTs}
+
+\sysprevious~\cite{scope2026fpt} addresses peripheral borrowing across DUT and
+host address domains. Its FPGA substrate remaps outgoing BAR accesses,
+translates incoming DMA addresses, and regenerates DUT-visible interrupts.
+Direct Control Mode routes mapped register operations in hardware and relies
+on SCOPE-aware DUT software. Proxy Forwarding Mode exposes split-driver
+commands to a host proxy for observation and replay. Device-specific semantic
+adapters define submission, DMA, completion, and event behavior. This
+substrate supports physical-device execution, address translation, and
+local-host payload DMA without software copying. \sys adds the configuration
+and state coordination needed for DUT OS enumeration and native-driver binding.
+
+Host software selects the logical device hierarchy and physical-device
+bindings in \sys. The tested Linux NVMe and Ethernet drivers discover and
+operate their corresponding endpoints without modification or a
+SCOPE-specific command interface. Accelerator workloads use adapted DUT
+software. The host-owned
+configuration, FPGA BAR routes, request metadata, and completion state
+must remain consistent with physical execution. Section~\ref{sec:coherence}
+specifies the corresponding commit conditions.

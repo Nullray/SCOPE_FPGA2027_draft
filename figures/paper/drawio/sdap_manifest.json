@@ -1,0 +1,44 @@
+[
+  {
+    "figure": "fig01_access_comparison_sdap",
+    "width": 1100,
+    "height": 820,
+    "font": "Times New Roman",
+    "native": true
+  },
+  {
+    "figure": "fig02_sdn_abstraction_sdap",
+    "width": 1100,
+    "height": 735,
+    "font": "Times New Roman",
+    "native": true
+  },
+  {
+    "figure": "fig03_system_architecture_sdap",
+    "width": 1740,
+    "height": 840,
+    "font": "Times New Roman",
+    "native": true
+  },
+  {
+    "figure": "fig04_configuration_runtime_sdap",
+    "width": 1640,
+    "height": 310,
+    "font": "Times New Roman",
+    "native": true
+  },
+  {
+    "figure": "fig05_distributed_commits_sdap",
+    "width": 1100,
+    "height": 735,
+    "font": "Times New Roman",
+    "native": true
+  },
+  {
+    "figure": "fig06_metadata_payload_sdap",
+    "width": 1000,
+    "height": 480,
+    "font": "Times New Roman",
+    "native": true
+  }
+]

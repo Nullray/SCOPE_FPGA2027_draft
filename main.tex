@@ -11,10 +11,14 @@
 \usepackage{xspace}
 \usepackage{enumitem}
 \usepackage{tabularx}
-\usepackage{placeins}
+\usepackage{indentfirst}
 
-\newcommand{\sys}{\textsc{SCOPE}\xspace}
-\newcommand{\tax}{\emph{peripheral integration tax}\xspace}
+% Indent the first body paragraph after every sectioning command as well as
+% subsequent paragraphs. This is a deliberate manuscript-wide style choice.
+\setlength{\parindent}{1em}
+
+\newcommand{\sys}{SDP\xspace}
+\newcommand{\sysprevious}{\textsc{SCOPE}\xspace}
 
 \acmConference[FPGA '27]{The 35th ACM/SIGDA International Symposium on Field-Programmable Gate Arrays}{March 14--16, 2027}{Monterey, CA, USA}
 \acmYear{2027}
@@ -22,54 +26,50 @@
 \settopmatter{printacmref=false}
 
 \hypersetup{
-  pdftitle={SCOPE: A Software-Defined Peripheral Subsystem for FPGA Prototyping},
+  pdftitle={SDP: Software-Defined Peripherals for FPGA-Based Prototyping of Open-Source Processors},
   pdfauthor={Anonymous Authors}
 }
 
 \begin{document}
 
-\title{SCOPE: A Software-Defined Peripheral Subsystem for FPGA Prototyping}
+\title[SDP: Software-Defined Peripherals]{SDP: Software-Defined Peripherals for FPGA-Based Prototyping of Open-Source Processors}
 \author{Anonymous Author(s)}
 
 \begin{abstract}
-FPGA prototypes must run production operating systems and drivers against real
-peripherals, yet the devices available to a design under test (DUT) are usually
-fixed by board connectors, host placement, and device-specific FPGA logic.
-Remote access alone is insufficient because an unmodified DUT must discover a
-legal PCIe hierarchy and observe coherent register, queue, DMA, completion, and
-interrupt behavior. We present \sys, a software-defined peripheral subsystem
-that makes the DUT-visible composition and backend binding software choices.
-\sys separates device presentation from backend realization and separates
-control semantics from payload movement. A generic FPGA front-end provides
-configuration shadowing, BAR routing, event transport, DMA windows, and
-interrupt injection; host software owns the logical device state, translates
-device-specific submissions and addresses, and binds each endpoint to a
-physical backend. Three ordering invariants reconnect the separated functions:
-configuration with routing, submission with translated DMA state, and returned
-data with completion. A pre-silicon prototype runs standard Linux NVMe and Intel
-82580 drivers against physical backends. DUT-observed proxy BAR-write round
-trips are $29.92\,\si{\micro\second}$ for NVMe and
-$28.06\,\si{\micro\second}$ for the NIC. By keeping payload movement off this
-control path, 128-KiB sequential-read bandwidth reaches
-$2596.3\,\si{\mega\byte\per\second}$, or 99.1\% of the host-attached result.
-These results demonstrate configurable functional access while exposing the
-timing cost and fidelity boundary introduced by semantic mediation.
+FPGA-based processor prototypes use physical peripherals to exercise I/O
+interactions before silicon is available, but board interfaces constrain device
+composition. Peripheral borrowing broadens access to host-attached devices, but
+software-defined composition must also preserve the device
+behavior expected by native drivers.
+
+We present \sys, which separates logical presentation from physical attachment
+and control mediation from payload movement. Software selects a supported device hierarchy for the design under test (DUT) before
+enumeration and binds endpoints to compatible local or remote devices. A generic
+FPGA front-end and host software back-ends coordinate configuration, submission,
+data visibility, and completion.
+
+On a 50-MHz prototype, unmodified Linux storage and network drivers operate with
+physical devices, while Vortex and FSA workloads pass correctness checks.
+Local-host 128-KiB sequential NVMe read throughput at queue
+depth one differs by less than 2\% from the on-board baseline. Three injected NVMe faults elicit distinct driver
+responses. These results demonstrate functional access, without establishing
+direct-attachment timing equivalence or scalability under simultaneous I/O.
 \end{abstract}
 
 \ccsdesc[500]{Hardware~Reconfigurable logic and FPGAs}
 \ccsdesc[300]{Computer systems organization~System on chip}
 \ccsdesc[300]{Software and its engineering~Device drivers}
 
-\keywords{FPGA prototyping, PCIe, real peripherals, software-defined I/O, device virtualization, PCIe switch}
+\keywords{open-source processors, FPGA-based prototyping, software-defined I/O,
+peripheral composition, native device drivers, PCIe virtualization}
 
 \maketitle
 
 \input{sections/01-introduction}
 \input{sections/02-background-motivation}
-\input{sections/03-overview}
-\input{sections/04-design}
-\input{sections/06-evaluation}
 \input{sections/07-related-work}
+\input{sections/03-overview}
+\input{sections/06-evaluation}
 \input{sections/08-discussion}
 \input{sections/09-conclusion}
 

@@ -1,127 +1,156 @@
-\section{Design}
-\label{sec:design}
+\subsection{State Ownership and Commit Points}
+\label{sec:coherence}
 
-The design places a configurable device boundary between the native driver and
-the physical backend. Topology and configuration establish that boundary;
-semantic mediation and DMA realization preserve it during I/O. The following
-mechanisms enforce the three coherence invariants in
-Section~\ref{sec:overview} while retaining a generic FPGA interface.
+The host back-end maintains each endpoint's logical state, the FPGA holds
+a committed configuration copy, and the assigned physical device executes
+I/O operations. Figure~\ref{fig:coherence} summarizes three per-endpoint
+commit points that coordinate these components. Configuration retirement
+(C1) allows the DUT to complete a configuration write after the updated
+configuration and routes are installed in the FPGA. Physical submission
+(C2) releases work after its metadata and required input data are visible
+to the device. Logical
+completion publication (C3) makes completion visible to the DUT driver
+after the corresponding data is visible in DUT memory.
 
-\begin{figure*}[t]
+Here, \emph{coherence} denotes consistency between related device states and
+the order in which components observe them. It does not denote a
+cache-coherence protocol. Request identifiers associate events with
+operations, but memory visibility requires ordering in the underlying
+memory path. The commit conditions assume protocol-compliant drivers,
+valid DMA mappings, compatible devices, and a memory path that preserves
+the required publication order. They apply to dependent operations within
+each endpoint. Independent requests may complete in the order allowed by
+their device protocols, with no global order imposed across devices.
+
+\begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{figures/coherence_protocols.pdf}
-    \caption{The three ordering contracts that preserve one driver-visible
-    device across distributed state. In each panel, downward arrows denote the
-    required happens-before order; the final green event may become visible only
-    after the preceding state transition.}
+    \includegraphics[width=\columnwidth]{figures/paper/drawio/fig05_distributed_commits_sdap.pdf}
+    \caption{Per-endpoint commit conditions. Dashed arrows connect prerequisites
+    to permitted actions; dots mark C1--C3.}
     \label{fig:coherence}
-    \Description{Three sequences show configuration and route update before
-    write completion, queue stabilization and address translation before a
-    physical doorbell, and data visibility before completion and interrupt.}
-\end{figure*}
+    \Description{Three rows connect a prerequisite to a commit event:
+    installed configuration and routes precede C1 write retirement;
+    device-visible metadata and input precede C2 physical submission;
+    DUT-visible data precedes C3 completion publication. Software and direct
+    DMA publication obey the same C3 condition.}
+\end{figure}
 
-\subsection{Logical Topology Construction}
+\subsubsection{Configuration--Route Coherence}
+\label{sec:configuration-commit}
 
-The software back-end starts from a topology specification that lists enabled
-logical endpoints, their virtual BDFs, device templates, and backend bindings.
-It constructs Type-1 bridge images and Type-0 endpoint images, including vendor
-and device identity, class code, BAR shape, and the capabilities that \sys can
-faithfully implement. Capabilities are promises: for example, the current NIC
-template omits MSI-X because the prototype implements a shared level interrupt
-rather than a virtual MSI-X table and vector remapper.
-The selectable view is therefore constrained by both the semantic adapter and
-the physical backend. Changing an identity field alone cannot make a backend
-implement a different device protocol.
+The local back-end maintains the authoritative writable configuration state.
+The initial configuration image and route state are installed before
+enumeration. During enumeration and subsequent operation, the front-end holds
+each supported configuration write pending and reports it as a control event.
+The back-end applies the configuration-field semantics and updates the
+FPGA's committed copy and any affected BAR route. To prevent use of a
+partially updated route, it invalidates the entry before replacing its
+address fields and writes the validity field last. A readback fence orders
+these updates before the matching acknowledgment, which permits the DUT
+to complete the configuration write at C1.
 
-Topology realization produces two coupled artifacts. A compact ECAM image is
-copied into FPGA-visible shadow memory, and a route table maps assigned BAR
-ranges to logical backend identifiers. A readiness protocol hides both paths
-until the image and routes are initialized, preventing Linux enumeration from
-observing a partially constructed hierarchy.
+The acknowledgment identifies the pending write, while the ordered updates
+make the new configuration and route visible in the FPGA. The DUT cannot
+complete the write before its associated route update is installed.
+Configuration reads use the committed front-end copy, with the local
+back-end retaining authority over writable state.
 
-\subsection{Configuration-Space Virtualization}
+\subsubsection{Submission--DMA Coherence}
+\label{sec:submission-commit}
 
-The FPGA front-end exposes a standard ECAM aperture. Reads to defined BDFs use
-the shadow memory fast path; reads to absent functions return all ones. Writes
-become fixed-size control events carrying BDF, offset, byte enables, payload,
-and a sequence number. Software applies PCI configuration semantics to the
-authoritative image, recomputes any BAR route affected by probing or assignment,
-writes the changed state back to the shadow, and acknowledges the matching
-sequence. Only then does the FPGA complete the DUT write. This rule makes a
-subsequent read and BAR access observe the new state.
+The native driver publishes queue entries in DUT memory before signaling
+submission. The adapter reads the published queue range through its memory
+mapping, checks entry stability, translates address-bearing metadata and
+indirect references, and records pending work in the endpoint context.
+At C2, the adapter may submit the operation to the physical device only
+after translated metadata and any required input data are visible in
+that device's address domain. A BAR response can acknowledge the DUT's
+control access before C2; it does not indicate that the physical request
+has been submitted or completed.
 
-The shadow is therefore a read cache rather than an independent device model.
-Software owns writable semantics, while the FPGA supplies predictable ECAM
-latency and a standard interface to the DUT.
+The local-host NVMe adapter illustrates this preparation. A submission queue
+entry (SQE) contains physical region page (PRP) references in the DUT address
+domain. The adapter derives transfer length from command and namespace state,
+translates PRP1/PRP2, and follows PRP lists to translate data-page and
+next-list references. It writes the adapted metadata through the shared
+mapping and verifies writeback before issuing the physical SQ doorbell.
+The translated references resolve through the FPGA DMA aperture, allowing
+the controller to transfer payload while software handles command metadata.
+Translating the queue base alone would leave nested payload references
+in the wrong address domain.
 
-\subsection{Endpoint Semantic Mediation}
+Checking a stable queue entry does not ensure that preceding driver writes
+have reached the adapter.
+The memory path must make driver writes visible to the adapter before
+inspection and translated metadata visible to the physical device before
+submission. A transport
+without these properties needs ordered staging or an explicit visibility
+mechanism. An acknowledgment that identifies a request cannot replace
+this ordering. A remote adapter must meet the same C2 requirements in the
+remote device's address domain.
 
-For runtime access, the FPGA matches a BAR address against its route entries and
-emits an event tagged with logical BDF, BAR, offset, width, byte enables, and
-sequence. The generic manager dispatches the event to a per-type semantic
-adapter. Reads return a value and status through a mailbox. Ordinary writes can
-be acknowledged after the required backend effect. Submission writes require a
-stronger ordering rule.
+Figure~\ref{fig:semantic-dma} separates metadata preparation from local-host
+payload DMA. The adapter translates buffer references before C2, and the
+physical device then uses those references for payload DMA. The aperture
+provides address reachability, while the memory path must preserve data
+visibility.
 
-A native driver prepares commands or descriptors in memory before writing a
-doorbell. The physical backend cannot consume the original entry because it
-contains DUT addresses. The adapter waits until the FPGA has accepted the BAR
-write and the associated memory entry is stable, parses the entry, translates
-its DMA references, writes the translated form, and only then forwards the
-physical doorbell. This sequence preserves ownership transfer without requiring
-the DUT driver to understand the proxy.
+Ethernet and accelerator adapters apply the same submission requirements
+to their device protocols.
+The Ethernet back-end translates ring and descriptor buffer addresses while
+preserving reset and interrupt cause/mask semantics. The back-end for the
+Vortex GPGPU~\cite{tine2021vortex}
+handles DUT commands, translates memory operands, and maintains separate
+logical and physical queue state. Adapted DUT software accesses the Vortex
+endpoint through its device-specific transport, with completion and error
+states returned through the logical queue. Both adapters specialize protocol
+handling and address interpretation while reusing presentation, dispatch,
+and transport.
 
-Device semantics remain explicit. The NVMe adapter understands controller
-registers, queue setup, doorbells, PRPs and PRP lists, and phase-tagged CQEs. The
-NIC adapter understands ring bases and lengths, descriptor buffer addresses,
-tail updates, reset behavior, and interrupt cause/mask registers. Common
-dispatch and transport do not make unlike devices semantically interchangeable.
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/paper/drawio/fig06_metadata_payload_sdap.pdf}
+    \caption{Local-host metadata preparation before C2 and payload DMA through
+    the FPGA aperture (blue path).}
+    \label{fig:semantic-dma}
+    \Description{The native driver publishes work for the host adapter,
+    which uses endpoint state and address translation to prepare metadata.
+    The device consumes that metadata after C2. A separate blue DMA path
+    connects the physical device to DUT payload memory through the FPGA
+    aperture.}
+\end{figure}
 
-This boundary determines which operations require virtualization. State that
-contains DUT addresses or affects virtual configuration, ownership, or interrupt
-visibility requires mediation. Operations whose semantics remain valid at the
-backend can retain physical execution after this adaptation. Bypassing a
-required translation would violate the device contract even if it reduced
-control latency.
+\subsubsection{Data--Completion Coherence}
+\label{sec:completion-commit}
 
-\subsection{DMA Data-Path Realization}
+The adapter validates physical completion or writeback and matches it to
+outstanding work recorded in the endpoint context. For a remote binding,
+the remote back-end completes required data transfers before returning the
+result. C3 marks the point at which logical completion becomes visible to
+the DUT driver, after the corresponding data effects are visible in DUT
+memory. This requirement applies both to completion written by software
+and to a record made valid by direct DMA. Physical completion may occur
+earlier, while the data is still being transferred or made visible to the DUT.
 
-\sys separates address retargeting from byte movement. On submission, a semantic
-adapter replaces each DUT physical address with an address reachable by the
-selected physical backend. For host-local devices, the translated address can
-target a coherent alias of DUT memory through the FPGA DMA aperture, allowing
-the physical device to move payload without a software copy. A remote backend
-may instead use staging or a transport-specific direct path. Both modes preserve
-the same logical endpoint contract even though their performance and copy count
-differ.
+For software-published completion, the local back-end finishes required
+data and writeback publication before releasing the completion. For a
+directly DMA-visible record, the physical device and memory path must make
+the data visible before the record's valid or ownership indication.
+Back-end polling or a delayed interrupt cannot prevent a driver from
+observing a record that has already become valid too early.
 
-Completion follows the reverse dependency. The back-end first makes returned
-payload and device writebacks visible in DUT memory. It then publishes the
-guest-visible completion state, updates the adapter's pending state, and finally
-changes the virtual interrupt level. This ordering prevents a driver from being
-woken before the data it will consume.
+For local-host NVMe, the adapter validates a completion queue entry (CQE)
+by checking its phase, queue identifier, and command identifier against
+outstanding work. The controller writes CQEs directly to DUT memory through
+the aperture, so the host adapter checks completions for request tracking
+and notification. The DUT driver can observe CQEs independently of that
+check. A valid CQE indicates data visibility only if data-before-completion
+ordering is preserved through the aperture and DUT mapping. Coherent
+access alone does not establish this order.
 
-\subsection{Interrupt Virtualization}
-
-The initial prototype exports legacy INTx. Each backend maintains private
-pending state, and the manager ORs those states into one aggregate level. A
-queue-consumption doorbell, mask update, or reset changes only the owning
-backend; the physical line is deasserted only when no backend remains pending.
-For the NIC, the adapter also preserves read-clear and set/clear semantics of
-the interrupt cause and mask registers. MSI/MSI-X requires per-vector table,
-address, and delivery virtualization and is outside the current implementation.
-
-\subsection{Scaling the FPGA Mechanism}
-
-The FPGA contains endpoint-independent mechanisms: one ECAM service path, one
-control-event channel, one mailbox, a parameterized route table, DMA windows,
-and interrupt injection. Adding another supported endpoint consumes another
-configuration slot, route state, and software object, but does not replicate an
-NVMe or NIC controller in RTL. Adding a device type primarily extends the
-software semantic adapter. The remaining hardware cost is real and must be
-measured; the intended hypothesis is that it grows with generic capacity rather
-than with duplicated device protocol engines. The 1/2/4/8/13-slot synthesis
-sweep in Section~\ref{sec:evaluation} is the experiment that can turn this
-hypothesis into a quantitative scalability claim.
-The evaluation therefore examines native-driver compatibility and control/data
-cost separately from the unmeasured capacity-scaling hypothesis.
+For interrupt-enabled endpoints, the local back-end updates completion-related
+pending and interrupt state after C3. The shared level interrupt aggregates
+eligible endpoint states, so clearing one endpoint does not clear another.
+Polling drivers read the completion record without waiting for this
+notification. In both cases, the corresponding data must already be visible
+at C3. Per-vector interrupt delivery is outside the demonstrated scope.

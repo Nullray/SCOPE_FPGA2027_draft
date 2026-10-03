@@ -1,0 +1,162 @@
+[
+  {
+    "figure": "fig01_access_tradeoff",
+    "source": "access_tradeoff_scope_v2.png",
+    "width": 1225,
+    "height": 1284,
+    "nativeCells": 39,
+    "referenceSha256": "7906847dcca0b1ee029ac48415695dbcf9365893387353406e1bbcb33f8a461b"
+  },
+  {
+    "figure": "fig02_driver_contract",
+    "source": "driver_contract_ai_single_v2.png",
+    "width": 1024,
+    "height": 1536,
+    "nativeCells": 20,
+    "referenceSha256": "63183e13e379eeef59f30c3b502cc2013c873d91eeb4cd0c2aea5d6166b07b5f"
+  },
+  {
+    "figure": "fig03_system_architecture",
+    "source": "system_architecture_ai_v2.png",
+    "width": 1816,
+    "height": 866,
+    "nativeCells": 78,
+    "referenceSha256": "4fdf5fc8eaefdd66ff7e5dda6173c20495ee7f345d10e46ff865d0fe4c5a3545"
+  },
+  {
+    "figure": "fig04_sdn_planes",
+    "source": "sdn_planes_scope_v2.png",
+    "width": 1254,
+    "height": 1254,
+    "nativeCells": 17,
+    "referenceSha256": "df22169e3c9ab4b72bfea58da6e29f2f295f433d16baf5cd51b2eaee00028214"
+  },
+  {
+    "figure": "fig05_coherence_contracts",
+    "source": "coherence_contracts_ai_single_v2.png",
+    "width": 1230,
+    "height": 1278,
+    "nativeCells": 24,
+    "referenceSha256": "2c25afc6a823e3e3a36b39e3f146f5dffc7087bc21605d272cabf4e3d6ccc27c"
+  },
+  {
+    "figure": "fig06_topology_reconfiguration",
+    "source": "topology_reconfiguration_ai_single_v2.png",
+    "width": 1254,
+    "height": 1254,
+    "nativeCells": 19,
+    "referenceSha256": "6cd9458367440b08e6ca074fe288f95a285c4d6b476fa2c77105e23179302038"
+  },
+  {
+    "figure": "fig07_semantic_dma",
+    "source": "semantic_dma_ai_single_v2.png",
+    "width": 1024,
+    "height": 1536,
+    "nativeCells": 21,
+    "referenceSha256": "b1a316a60981bcdd791daee6ed203990ca39b14be62e1e45428bbc9803b34b75"
+  },
+  {
+    "figure": "fig08_measurement_boundaries",
+    "source": "measurement_boundaries_ai_single_v2.png",
+    "width": 1254,
+    "height": 1254,
+    "nativeCells": 22,
+    "referenceSha256": "e161e786becbe161be1c336262f9bcb1bd7dacc09baa7a8100887d2bd1328cad"
+  },
+  {
+    "figure": "fig05_commit_points_v3",
+    "source": "coherence_commit_points_ai_v3.png",
+    "width": 1254,
+    "height": 1254,
+    "nativeCells": 28,
+    "referenceSha256": "b3a9116efb318bcfa58196d371ed1ae51e0c1e4f047a79f1880ca22e41946eb6"
+  },
+  {
+    "figure": "fig03_system_architecture_aligned_v3",
+    "source": "system_architecture_aligned_ai_v3.png",
+    "width": 1816,
+    "height": 866,
+    "nativeCells": 78,
+    "referenceSha256": "02522656fe204aed221c9177ce3d290908d361b67934fddf44b44e54c1ee52aa"
+  },
+  {
+    "figure": "fig01_access_comparison_v3",
+    "source": "access_comparison_ai_v3.png",
+    "width": 1205,
+    "height": 1306,
+    "nativeCells": 44,
+    "referenceSha256": "f605fd87d4a07c329ffdc11b098337fa57124e1dd581014daa590b6596c784f2"
+  },
+  {
+    "figure": "fig01_access_comparison_v4",
+    "source": "access_comparison_ai_v4.png",
+    "width": 1142,
+    "height": 1377,
+    "nativeCells": 50,
+    "referenceSha256": "873416ed5bd5986f7605f44375c089c18e01756343237da65fafdf353da0deec"
+  },
+  {
+    "figure": "fig04_configuration_runtime_v4",
+    "source": "configuration_runtime_ai_v4.png",
+    "width": 1815,
+    "height": 867,
+    "nativeCells": 78,
+    "referenceSha256": "0f6f3814c1babd0228d2f42115ae6f5e4ea46e305630a2735434e46533b5906a"
+  },
+  {
+    "figure": "fig03_system_organization_v1",
+    "source": "system_organization_ai_v3.png",
+    "width": 1254,
+    "height": 1254,
+    "nativeCells": 41,
+    "referenceSha256": "bf5eff105053b310c1b3da101da4380ca27c8046b5e114a5f4534255b42c7a28"
+  },
+  {
+    "figure": "fig03_system_organization_v2",
+    "source": "system_organization_ai_v5.png",
+    "width": 1254,
+    "height": 1254,
+    "nativeCells": 39,
+    "referenceSha256": "775791471593914fed13c97d575ab5d2b1c23d1949fe36c2240a621a386507b4"
+  },
+  {
+    "figure": "fig03_system_organization_v3",
+    "source": "system_organization_remote_ai_v6.png",
+    "width": 1725,
+    "height": 912,
+    "nativeCells": 51,
+    "referenceSha256": "d813c9f35e291c2fc2f468af1cd07502c8e77d8d68ff5dd8dd3459bdc3d4fcf5"
+  },
+  {
+    "figure": "fig04_configuration_runtime_v5",
+    "source": "configuration_runtime_ai_v5.png",
+    "width": 1815,
+    "height": 867,
+    "nativeCells": 78,
+    "referenceSha256": "c3d55976703bb88b81ff43376b2ce7bec0a0e506f12d49e0d1018147446ec86b"
+  },
+  {
+    "figure": "fig04_configuration_runtime_v6",
+    "source": "configuration_runtime_ai_v6.png",
+    "width": 1815,
+    "height": 867,
+    "nativeCells": 77,
+    "referenceSha256": "eeeb6ba8c002f06df6b481767eba4306c158f0d031fe3eafa805eb973d5953f2"
+  },
+  {
+    "figure": "fig03_system_organization_v4",
+    "source": "system_organization_remote_ai_v9.png",
+    "width": 1638,
+    "height": 960,
+    "nativeCells": 64,
+    "referenceSha256": "afe0b63bed903fd11e0818e238e79a0d3f58895fcb27cdacecda7b42e20f72e5"
+  },
+  {
+    "figure": "fig01_sdn_planes_v3",
+    "source": "sdn_planes_comparison_ai_v3.png",
+    "width": 1983,
+    "height": 793,
+    "nativeCells": 63,
+    "referenceSha256": "c0e31dbec846a12f0edecda3c6d4e2e621c6fcce4cd2d86f75dd32b22ba50849"
+  }
+]

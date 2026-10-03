@@ -1,0 +1,43 @@
+\documentclass[tikz,border=4pt]{standalone}
+\input{figure_style.tex}
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[paneltitle, anchor=west] at (.1,5.06) {(a) Proxy BAR round trip};
+  \node[papermini, anchor=east] at (16.0,5.06) {DUT requester};
+  \draw[paperorange, line width=.95pt, -{Stealth[length=2mm]}]
+    (1.0,4.35) -- (15.15,4.35);
+  \foreach \x/\lab in {1.0/{DUT BAR write},5.05/{FPGA event},10.10/{Host software back-end},15.15/{DUT acknowledgement}} {
+    \fill[paperorange] (\x,4.35) circle (2pt);
+    \node[papermini, anchor=north] at (\x,4.23) {\lab};
+  }
+  \draw[paperorange, line width=.65pt] (1.0,4.78) -- (15.15,4.78);
+  \draw[paperorange, line width=.65pt] (1.0,4.67) -- (1.0,4.89);
+  \draw[paperorange, line width=.65pt] (15.15,4.67) -- (15.15,4.89);
+
+  \draw[paperline, line width=.65pt] (.1,3.45) -- (16.0,3.45);
+  \node[paneltitle, anchor=west] at (.1,3.13) {(b) Storage semantic submission};
+  \node[papermini, anchor=east] at (16.0,3.13) {separate wall-clock experiment};
+  \draw[paperorange, line width=.95pt, -{Stealth[length=2mm]}]
+    (1.0,2.43) -- (15.15,2.43);
+  \foreach \x/\lab in {1.0/{BAR event},5.05/{Queue inspection},10.10/{Address translation},15.15/{Physical doorbell}} {
+    \fill[paperorange] (\x,2.43) circle (2pt);
+    \node[papermini, anchor=north] at (\x,2.31) {\lab};
+  }
+  \draw[paperorange, line width=.65pt] (1.0,2.86) -- (15.15,2.86);
+  \draw[paperorange, line width=.65pt] (1.0,2.75) -- (1.0,2.97);
+  \draw[paperorange, line width=.65pt] (15.15,2.75) -- (15.15,2.97);
+
+  \draw[paperline, line width=.65pt] (.1,1.53) -- (16.0,1.53);
+  \node[paneltitle, anchor=west] at (.1,1.20) {(c) Direct Control reference};
+  \node[papermini, anchor=east] at (16.0,1.20) {different requester};
+  \draw[papermuted, line width=.8pt, -{Stealth[length=2mm]}]
+    (1.0,.48) -- (15.15,.48);
+  \fill[papermuted] (1.0,.48) circle (2pt);
+  \fill[papermuted] (15.15,.48) circle (2pt);
+  \node[papermini, anchor=north] at (1.0,.36) {MMIO issue};
+  \node[papermini, anchor=north] at (15.15,.36) {End of timed MMIO};
+  \draw[papermuted, line width=.65pt] (1.0,.91) -- (15.15,.91);
+  \draw[papermuted, line width=.65pt] (1.0,.80) -- (1.0,1.02);
+  \draw[papermuted, line width=.65pt] (15.15,.80) -- (15.15,1.02);
+\end{tikzpicture}
+\end{document}

@@ -1,0 +1,35 @@
+\documentclass[tikz,border=4pt]{standalone}
+\input{figure_style.tex}
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \draw[paperink, line width=.75pt, -{Stealth[length=1.9mm]}]
+    (1.05,.75) -- (7.35,.75);
+  \draw[paperink, line width=.75pt, -{Stealth[length=1.9mm]}]
+    (1.05,.75) -- (1.05,4.15);
+  \node[papermini, anchor=north] at (1.15,.64) {fixed};
+  \node[papermini, anchor=north] at (7.05,.64) {software-defined};
+  \node[papertext, anchor=north] at (4.15,.14)
+    {Programmability of device presentation};
+  \node[papermini, anchor=west] at (1.15,1.10) {modeled};
+  \node[papermini, anchor=west] at (1.15,3.92) {physical};
+  \node[papertext, rotate=90] at (.12,2.45)
+    {Physical execution retained};
+
+  \node[regular polygon, regular polygon sides=3, fill=paperink,
+    minimum size=7pt, inner sep=0pt] at (1.95,3.56) {};
+  \node[papertext, anchor=west] at (2.17,3.56) {Direct attachment};
+
+  \node[rectangle, fill=papermuted, minimum width=6pt,
+    minimum height=6pt, inner sep=0pt] at (5.4,1.45) {};
+  \node[papertext, anchor=west] at (5.62,1.45) {Device model};
+
+  \node[circle, draw=paperblue, fill=white, line width=1.35pt,
+    minimum size=11pt, inner sep=0pt] at (5.4,3.56) {};
+  \node[font=\footnotesize\bfseries, text=paperblue, anchor=west]
+    at (5.66,3.56) {SCOPE};
+  \node[papermini, anchor=west] at (5.66,3.17)
+    {virtualized presentation};
+  \node[papermini, anchor=west] at (5.66,2.88)
+    {physical execution};
+\end{tikzpicture}
+\end{document}

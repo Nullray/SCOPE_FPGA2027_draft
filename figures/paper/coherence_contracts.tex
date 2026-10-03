@@ -1,0 +1,29 @@
+\documentclass[tikz,border=4pt]{standalone}
+\input{figure_style.tex}
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+  % Three per-endpoint happens-before chains. No global ordering is asserted.
+  \foreach \x in {5.32,10.61} {
+    \draw[paperline, densely dashed] (\x,.24) -- (\x,4.88);
+  }
+  \node[paneltitle] at (2.66,4.69) {(a) Configuration--route};
+  \node[paneltitle] at (7.97,4.69) {(b) Submission--DMA};
+  \node[paneltitle] at (13.27,4.69) {(c) Data--completion};
+
+  \foreach \x/\a/\b/\c/\d in {
+    2.66/{config write}/{image + route agree}/{acknowledge}/{dependent access},
+    7.97/{queue entry stable}/{DMA addresses mapped}/{device-visible entry}/{physical doorbell},
+    13.27/{physical writeback}/{visible in DUT memory}/{completion published}/{INTx may assert}
+  } {
+    \node[papertext] at (\x,3.95) {\a};
+    \node[papertext] at (\x,3.09) {\b};
+    \node[papertext] at (\x,2.23) {\c};
+    \node[papertext] at (\x,1.37) {\d};
+    \draw[orangeflow] (\x,3.72) -- (\x,3.32);
+    \draw[orangeflow] (\x,2.86) -- (\x,2.46);
+    \draw[greenflow] (\x,2.00) -- (\x,1.60);
+  }
+  \node[papermini] at (7.97,.58)
+    {Required partial order ($\prec$) for each endpoint; spacing does not encode latency.};
+\end{tikzpicture}
+\end{document}

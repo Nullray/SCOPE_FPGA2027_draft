@@ -1,17 +1,22 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-\sys makes the peripheral subsystem visible to an FPGA-hosted DUT a software
-decision. Its method combines device-presentation--backend-implementation
-decoupling with control-semantics--data-path decoupling, and constrains the
-split with configuration--route, submission--DMA, and data--completion
-coherence. Virtualization provides a user-configured device view while physical
-backends retain execution
-of the exposed operations. This combination trades mediation cost and altered
-timing for configurability, with fidelity bounded by the supported semantics.
-The prototype evidence shows that a standard Linux stack can
-enumerate and use real NVMe and Ethernet backends through a generic FPGA
-interface, while the measured control and data results expose the current
-performance envelope. A complete NVMe+NIC concurrency run, fair direct
-baselines, and the 1/2/4/8/13-slot synthesis sweep remain necessary before
-making stronger claims about composition scalability.
+\sys extends peripheral borrowing with a software-selected device view
+for an FPGA-hosted processor DUT. It separates DUT-visible device presentation
+from physical-device assignment and control mediation from payload transfer.
+The FPGA front-end and host back-ends coordinate configuration updates,
+physical submission, and completion through C1--C3, subject to the
+memory-ordering requirements of the device protocols. Supported endpoints
+can be recomposed within the provisioned FPGA capacity while reusing their
+DUT software and the FPGA bitstream. RDMA allows physical devices to reside
+on remote hosts under the same DUT-visible interface.
+
+Unmodified Linux NVMe and Ethernet drivers operate with physical devices,
+and the tested accelerator workloads produce correct results. The evaluation
+measures DUT-observed control latency, queue-depth-one NVMe throughput,
+and FPGA resource use, and examines local back-end code and driver responses
+to injected faults. The evidence supports functional interaction for the
+tested operations, with mediation
+changing I/O timing. It does not establish timing equivalence to direct
+attachment, scaling under simultaneous I/O, or incremental FPGA resource
+use per endpoint.
